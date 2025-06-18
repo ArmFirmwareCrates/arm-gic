@@ -20,6 +20,3 @@ zerocopy = { version = "0.8.26", features = ["derive"] }
 
 [features]
 fakes = []
-
-[package.metadata.docs.rs]
-default-target = "aarch64-unknown-none"
