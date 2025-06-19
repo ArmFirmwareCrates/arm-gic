@@ -20,6 +20,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "6c00ce37_02d5d919",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1000043
+      },
+      "writtenOn": "2025-06-19T14:03:55Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "fba14ce7_db8b6a3d",
+      "revId": "9171056c5c01257d380993624beb61ea48c0161c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "bc3b72d2_8f238140",
         "filename": "README.md",
         "patchSetId": 2
@@ -37,6 +55,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "32621101_feca65e8",
+        "filename": "README.md",
+        "patchSetId": 2
+      },
+      "lineNbr": 30,
+      "author": {
+        "id": 1000043
+      },
+      "writtenOn": "2025-06-19T14:03:55Z",
+      "side": 1,
+      "message": "Acknowledged. Thanks for the link to mbedlts, that\u0027s helpful.",
+      "parentUuid": "bc3b72d2_8f238140",
+      "revId": "9171056c5c01257d380993624beb61ea48c0161c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "a0e70ea0_5b8fc8ad",
         "filename": "README.md",
         "patchSetId": 2
@@ -48,6 +84,24 @@
       "writtenOn": "2025-06-19T13:22:57Z",
       "side": 1,
       "message": "Hmm, are you ready to receive private security incidents on this project yet? It only becomes relevant after deployment. Once you\u0027re ready, you\u0027ll need to decide what security alias this should use (e.g. tf-a-security or a new one).",
+      "revId": "9171056c5c01257d380993624beb61ea48c0161c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "47a727ea_ec896b66",
+        "filename": "README.md",
+        "patchSetId": 2
+      },
+      "lineNbr": 47,
+      "author": {
+        "id": 1000043
+      },
+      "writtenOn": "2025-06-19T14:03:55Z",
+      "side": 1,
+      "message": "That\u0027s a good point. I must admit I\u0027ve copied what we had for other crates [1] without thinking this through, but now I think the security incident details should rather be removed from there as well. I\u0027ll prepare patches.\n\n[1] for example: https://git.trustedfirmware.org/plugins/gitiles/rust-spmc/arm-ffa/#reporting-security-issues",
+      "parentUuid": "a0e70ea0_5b8fc8ad",
       "revId": "9171056c5c01257d380993624beb61ea48c0161c",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
