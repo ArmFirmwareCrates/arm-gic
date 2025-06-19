@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fba14ce7_db8b6a3d",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1000096
+      },
+      "writtenOn": "2025-06-19T13:22:57Z",
+      "side": 1,
+      "message": "Need to say the inbound license is Apache-2.0 AND MIT AND DCO as per other comment.",
+      "revId": "9171056c5c01257d380993624beb61ea48c0161c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bc3b72d2_8f238140",
+        "filename": "README.md",
+        "patchSetId": 2
+      },
+      "lineNbr": 30,
+      "author": {
+        "id": 1000096
+      },
+      "writtenOn": "2025-06-19T13:22:57Z",
+      "side": 1,
+      "message": "Should say that contributions are made under the terms of Apache-2.0 AND MIT licenses AND the DCO. See https://github.com/Mbed-TLS/mbedtls/blob/development/CONTRIBUTING.md for an example.",
+      "revId": "9171056c5c01257d380993624beb61ea48c0161c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a0e70ea0_5b8fc8ad",
+        "filename": "README.md",
+        "patchSetId": 2
+      },
+      "lineNbr": 47,
+      "author": {
+        "id": 1000096
+      },
+      "writtenOn": "2025-06-19T13:22:57Z",
+      "side": 1,
+      "message": "Hmm, are you ready to receive private security incidents on this project yet? It only becomes relevant after deployment. Once you\u0027re ready, you\u0027ll need to decide what security alias this should use (e.g. tf-a-security or a new one).",
+      "revId": "9171056c5c01257d380993624beb61ea48c0161c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}
