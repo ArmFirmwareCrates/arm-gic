@@ -1,6 +1,5 @@
 // Copyright 2023 The arm-gic Authors.
-// This project is dual-licensed under Apache 2.0 and MIT terms.
-// See LICENSE-APACHE and LICENSE-MIT for details.
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 #[cfg(any(test, feature = "fakes"))]
 #[macro_use]
