@@ -1,6 +1,5 @@
 // Copyright 2025 The arm-gic Authors.
-// This project is dual-licensed under Apache 2.0 and MIT terms.
-// See LICENSE-APACHE and LICENSE-MIT for details.
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 /// Generates a safe public function named `$function_name` to read the 32-bit system register `$sysreg`.
 ///
