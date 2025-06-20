@@ -5,6 +5,12 @@
 ### Breaking changes
 
 - Use safe-mmio fields in Sgi and merge PPI registers.
+- Change `GicV3` getters to return component driver instances instead of raw register blocks.
+  - `GicV3::gicr_ptr()`, `GicV3::sgi_ptr()` -> `GicV3::redistributor()`
+
+### Improvements
+
+- Split the implementation into separate Distributor, Redistributor and CPU interface components.
 
 ## 0.6.1
 
