@@ -502,62 +502,42 @@ pub struct Gicr {
 #[repr(C, align(8))]
 pub struct Sgi {
     _reserved0: [u32; 32],
-    /// Interrupt group register 0.
-    pub igroupr0: ReadPureWrite<u32>,
-    /// Interrupt group registers for extended PPI range.
-    pub igroupr_e: [ReadPureWrite<u32>; 2],
+    /// Interrupt group registers.
+    pub igroupr: [ReadPureWrite<u32>; 3],
     _reserved1: [u32; 29],
-    /// Interrupt set-enable register 0.
-    pub isenabler0: ReadPureWrite<u32>,
-    /// Interrupt set-enable registers for extended PPI range.
-    pub isenabler_e: [ReadPureWrite<u32>; 2],
+    /// Interrupt set-enable registers.
+    pub isenabler: [ReadPureWrite<u32>; 3],
     _reserved2: [u32; 29],
-    /// Interrupt clear-enable register 0.
-    pub icenabler0: ReadPureWrite<u32>,
-    /// Interrupt clear-enable registers for extended PPI range.
-    pub icenabler_e: [ReadPureWrite<u32>; 2],
+    /// Interrupt clear-enable registers.
+    pub icenabler: [ReadPureWrite<u32>; 3],
     _reserved3: [u32; 29],
-    /// Interrupt set-pending register 0.
-    pub ispendr0: u32,
-    /// Interrupt set-pending registers for extended PPI range.
-    pub ispendr_e: [u32; 2],
+    /// Interrupt set-pending registers.
+    pub ispendr: [ReadPureWrite<u32>; 3],
     _reserved4: [u32; 29],
-    /// Interrupt clear-pending register 0.
-    pub icpendr0: u32,
-    /// Interrupt clear-pending registers for extended PPI range.
-    pub icpendr_e: [u32; 2],
+    /// Interrupt clear-pending registers.
+    pub icpendr: [ReadPureWrite<u32>; 3],
     _reserved5: [u32; 29],
-    /// Interrupt set-active register 0.
-    pub isactiver0: u32,
-    /// Interrupt set-active registers for extended PPI range.
-    pub isactive_e: [u32; 2],
+    /// Interrupt set-active registers.
+    pub isactiver: [ReadPureWrite<u32>; 3],
     _reserved6: [u32; 29],
-    /// Interrupt clear-active register 0.
-    pub icactiver0: u32,
-    /// Interrupt clear-active registers for extended PPI range.
-    pub icactive_e: [u32; 2],
+    /// Interrupt clear-active registers.
+    pub icactiver: [ReadPureWrite<u32>; 3],
     _reserved7: [u32; 29],
     /// Interrupt priority registers.
-    pub ipriorityr: [ReadPureWrite<u8>; 32],
-    /// Interrupt priority registers for extended PPI range.
-    pub ipriorityr_e: [ReadPureWrite<u8>; 64],
+    pub ipriorityr: [ReadPureWrite<u8>; 96],
     _reserved8: [u32; 488],
     /// SGI configuration register, PPI configuration register and extended PPI configuration
     /// registers.
     pub icfgr: [ReadPureWrite<u32>; 6],
     _reserved9: [u32; 58],
-    /// Interrupt group modifier register 0.
-    pub igrpmodr0: ReadPureWrite<u32>,
-    /// Interrupt group modifier registers for extended PPI range.
-    pub igrpmodr_e: [ReadPureWrite<u32>; 2],
+    /// Interrupt group modifier registers.
+    pub igrpmodr: [ReadPureWrite<u32>; 3],
     _reserved10: [u32; 61],
     /// Non-secure access control register.
     pub nsacr: ReadPureWrite<u32>,
     _reserved11: [u32; 95],
-    /// Non-maskable interrupt register for PPIs.
-    pub inmir0: u32,
-    /// Non-maskable interrupt register for extended PPIs.
-    pub inmir_e: [u32; 31],
+    /// Non-maskable interrupt register for PPIs and extended PPIs.
+    pub inmir: [ReadPureWrite<u32>; 32],
     _reserved12: [u32; 11264],
     /// Implementation defined registers.
     pub implementation_defined: [u32; 4084],
