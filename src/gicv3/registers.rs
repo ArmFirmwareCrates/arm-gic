@@ -40,7 +40,7 @@ impl Debug for GicdCtlr {
     }
 }
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
+#[derive(Copy, Clone, Default, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 pub struct GicrCtlr(u32);
 
 bitflags! {
@@ -82,6 +82,15 @@ bitflags! {
         const VLPIS = 1 << 1;
         /// Physical LPIs are supported.
         const PLIPS = 1 << 0;
+    }
+}
+
+impl GicrTyper {
+    const PPI_NUM_SHIFT : usize = 27;
+    const PPI_NUM_MASK : u64 = 0b11111;
+
+    pub fn ppi_num(&self) -> usize {
+        ((self.bits() >> Self::PPI_NUM_SHIFT) & Self::PPI_NUM_MASK) as usize
     }
 }
 
@@ -416,6 +425,18 @@ pub struct Sgi {
     /// Implementation defined registers.
     pub implementation_defined: [u32; 4084],
     _reserved13: [u32; 12],
+}
+
+impl Sgi {
+    pub const IGROUPR_BITS: usize = 1;
+    pub const ISENABLER_BITS: usize = 1;
+    pub const ICENABLER_BITS: usize = 1;
+    pub const ISPENDR_BITS: usize = 1;
+    pub const ISACTIVER_BITS: usize = 1;
+    pub const ICACTIVER_BITS: usize = 1;
+    pub const IPRIORITY_BITS: usize = 8;
+    pub const ICFGR_BITS: usize = 2;
+    pub const IGRPMODR_BITS: usize = 1;
 }
 
 #[cfg(test)]
