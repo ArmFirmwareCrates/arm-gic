@@ -4,9 +4,11 @@
 
 //! Driver for the Arm Generic Interrupt Controller version 3 (or 4).
 
+pub mod redistributor;
 pub mod registers;
 
-use self::registers::{Gicd, GicdCtlr, Gicr, GicrCtlr, Sgi, Waker};
+use crate::gicv3::redistributor::GicRedistributor;
+use crate::gicv3::registers::{Gicd, GicdCtlr, GicrSgi, GicrTyper};
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 use crate::sysreg::{
     read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
@@ -15,10 +17,10 @@ use crate::sysreg::{
     write_icc_sgi1r_el1, write_icc_sre_el1,
 };
 use crate::{IntId, Trigger};
-use core::{hint::spin_loop, ptr::NonNull};
-use registers::{GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Typer};
+use core::ptr::NonNull;
+use registers::Typer;
 use safe_mmio::fields::ReadPureWrite;
-use safe_mmio::{SharedMmioPointer, UniqueMmioPointer, field, field_shared, split_fields};
+use safe_mmio::{UniqueMmioPointer, field, field_shared};
 use thiserror::Error;
 
 /// An error which may be returned from operations on a GIC Redistributor.
@@ -29,6 +31,8 @@ pub enum GICRError {
     #[error("Redistributor has already been notified that the connected core is asleep")]
     AlreadyAsleep,
 }
+
+const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
 /// Modifies `nth` bit of memory pointed by `registers`.
 fn modify_bit(mut registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize, set_bit: bool) {
@@ -149,16 +153,17 @@ impl GicV3<'_> {
     /// `cpu` should be the linear index of the CPU core as used by the GIC redistributor.
     #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
     pub fn setup(&mut self, cpu: usize) {
+        use crate::gicv3::registers::GicdCtlr;
+
         self.init_cpu(cpu);
 
         // Enable affinity routing and non-secure group 1 interrupts.
         field!(self.gicd, ctlr).write(GicdCtlr::ARE_S | GicdCtlr::EnableGrp1NS);
 
         {
-            // Put all SGIs and PPIs into non-secure group 1.
+            // Init redistributors
             for cpu in 0..self.cpu_count {
-                let mut sgi = self.sgi_ptr(cpu);
-                field!(sgi, igroupr).get(0).unwrap().write(0xffffffff);
+                self.redistributor(cpu).configure_default_settings();
             }
         }
         // Put all SPIs into non-secure group 1.
@@ -194,12 +199,8 @@ impl GicV3<'_> {
     /// otherwise this is ignored and may be `None`.
     pub fn enable_interrupt(&mut self, intid: IntId, cpu: Option<usize>, enable: bool) {
         if intid.is_private() {
-            let mut sgi = self.sgi_ptr(cpu.unwrap());
-            if enable {
-                set_bit(field!(sgi, isenabler).into(), intid.0 as usize);
-            } else {
-                set_bit(field!(sgi, icenabler).into(), intid.0 as usize);
-            }
+            self.redistributor(cpu.unwrap())
+                .enable_interrupt(intid, enable);
         } else if enable {
             set_bit(field!(self.gicd, isenabler).into(), intid.0 as usize);
         } else {
@@ -231,12 +232,7 @@ impl GicV3<'_> {
             }
         }
         for cpu in 0..self.cpu_count {
-            let mut sgi = self.sgi_ptr(cpu);
-            if enable {
-                field!(sgi, isenabler).get(0).unwrap().write(0xffffffff);
-            } else {
-                field!(sgi, icenabler).get(0).unwrap().write(0xffffffff);
-            }
+            self.redistributor(cpu).enable_all_interrupts(enable);
         }
     }
 
@@ -255,11 +251,8 @@ impl GicV3<'_> {
     pub fn set_interrupt_priority(&mut self, intid: IntId, cpu: Option<usize>, priority: u8) {
         // Affinity routing is enabled, so use the GICR for SGIs and PPIs.
         if intid.is_private() {
-            let mut sgi = self.sgi_ptr(cpu.unwrap());
-            field!(sgi, ipriorityr)
-                .get(intid.0 as usize)
-                .unwrap()
-                .write(priority);
+            self.redistributor(cpu.unwrap())
+                .set_interrupt_priority(intid, priority);
         } else {
             field!(self.gicd, ipriorityr)
                 .get(intid.0 as usize)
@@ -275,14 +268,7 @@ impl GicV3<'_> {
 
         // Affinity routing is enabled, so use the GICR for SGIs and PPIs.
         if intid.is_private() {
-            let mut sgi = self.sgi_ptr(cpu.unwrap());
-            let mut icfgr = field!(sgi, icfgr);
-            let mut register = icfgr.get(index).unwrap();
-            let v = register.read();
-            register.write(match trigger {
-                Trigger::Edge => v | bit,
-                Trigger::Level => v & !bit,
-            });
+            self.redistributor(cpu.unwrap()).set_trigger(intid, trigger);
         } else {
             let mut icfgr = field!(self.gicd, icfgr);
             let mut register = icfgr.get(index).unwrap();
@@ -297,18 +283,7 @@ impl GicV3<'_> {
     /// Assigns the interrupt with id `intid` to interrupt group `group`.
     pub fn set_group(&mut self, intid: IntId, cpu: Option<usize>, group: Group) {
         if intid.is_private() {
-            let mut sgi = self.sgi_ptr(cpu.unwrap());
-            if let Group::Secure(sg) = group {
-                clear_bit(field!(sgi, igroupr).into(), intid.0 as usize);
-                let igrpmodr = field!(sgi, igrpmodr).into();
-                match sg {
-                    SecureIntGroup::Group1S => set_bit(igrpmodr, intid.0 as usize),
-                    SecureIntGroup::Group0 => clear_bit(igrpmodr, intid.0 as usize),
-                }
-            } else {
-                set_bit(field!(sgi, igroupr).into(), intid.0 as usize);
-                clear_bit(field!(sgi, igrpmodr).into(), intid.0 as usize);
-            }
+            self.redistributor(cpu.unwrap()).set_group(intid, group);
         } else if let Group::Secure(sg) = group {
             let igroupr = field!(self.gicd, igroupr);
             clear_bit(igroupr.into(), intid.0 as usize);
@@ -409,19 +384,19 @@ impl GicV3<'_> {
 
     /// Returns information about selected GIC redistributor.
     pub fn gicr_typer(&mut self, cpu: usize) -> GicrTyper {
-        field_shared!(self.gicr_ptr(cpu), typer).read()
+        self.redistributor(cpu).typer()
     }
 
     /// Returns a pointer to the GIC distributor registers.
     ///
     /// This may be used to read and write the registers directly for functionality not yet
     /// supported by this driver.
-    pub fn gicd_ptr(&mut self) -> UniqueMmioPointer<Gicd> {
+    pub fn gicd_ptr(&mut self) -> UniqueMmioPointer<'_, Gicd> {
         self.gicd.reborrow()
     }
 
     /// Returns a pointer to the GIC redistributor, SGI and PPI registers.
-    fn gicr_sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<GicrSgi> {
+    fn gicr_sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<'_, GicrSgi> {
         assert!(cpu < self.cpu_count);
         // SAFETY: The caller of `GicV3::new` promised that `gicr_base` and `gicr_stride` were valid
         // and there are no aliases.
@@ -432,22 +407,9 @@ impl GicV3<'_> {
         }
     }
 
-    /// Returns a pointer to the GIC redistributor registers.
-    ///
-    /// This may be used to read and write the registers directly for functionality not yet
-    /// supported by this driver.
-    pub fn gicr_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<Gicr> {
-        // SAFETY: We only split out a single field.
-        unsafe { split_fields!(self.gicr_sgi_ptr(cpu), gicr) }
-    }
-
-    /// Returns a pointer to the GIC redistributor SGI and PPI registers.
-    ///
-    /// This may be used to read and write the registers directly for functionality not yet
-    /// supported by this driver.
-    pub fn sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<Sgi> {
-        // SAFETY: We only split out a single field.
-        unsafe { split_fields!(self.gicr_sgi_ptr(cpu), sgi) }
+    /// Returns redistributor instance of the given CPU index.
+    pub fn redistributor(&mut self, cpu: usize) -> GicRedistributor<'_> {
+        GicRedistributor::new(self.gicr_sgi_ptr(cpu))
     }
 
     /// Blocks until register write for the current Security state is no longer in progress.
@@ -478,133 +440,31 @@ impl GicV3<'_> {
 
     /// Blocks until register write for the current Security state is no longer in progress.
     pub fn gicr_barrier(&mut self, cpu: usize) {
-        let gicr = self.gicr_ptr(cpu);
-        while field_shared!(gicr, ctlr).read().contains(GicrCtlr::RWP) {}
-    }
-
-    fn gicr_wait_until_group_not_in_transit(gicr_ptr: &SharedMmioPointer<Gicr>) {
-        let pwrr = field_shared!(gicr_ptr, pwrr).read();
-
-        // Check group not transitioning
-        while pwrr.contains(GicrPwrr::RedistributorGroupPowerDown)
-            != pwrr.contains(GicrPwrr::RedistributorGroupPoweredOff)
-        {
-            spin_loop();
-        }
-    }
-
-    fn gicr_needs_power_management(gicr_ptr: &SharedMmioPointer<Gicr>) -> bool {
-        let iidr: GicrIidr = field_shared!(gicr_ptr, iidr).read();
-
-        iidr.model_id() == GicrIidr::MODEL_ID_ARM_GIC_600
-            || iidr.model_id() == GicrIidr::MODEL_ID_ARM_GIC_600AE
-            || iidr.model_id() == GicrIidr::MODEL_ID_ARM_GIC_700
-    }
-
-    fn gic600_gic700_gicr_power_on(mut gicr_ptr: UniqueMmioPointer<Gicr>) {
-        loop {
-            // Wait until group not transitioning.
-            Self::gicr_wait_until_group_not_in_transit(&gicr_ptr);
-
-            // Power on the redistributor.
-            field!(gicr_ptr, pwrr).write(GicrPwrr::empty());
-
-            // Wait until the power on state is reflected.
-            // If RDPD == 0 then powered on.
-            if !field_shared!(gicr_ptr, pwrr)
-                .read()
-                .contains(GicrPwrr::RedistributorPowerDown)
-            {
-                break;
-            }
-        }
-    }
-
-    fn gic600_gic700_gicr_power_off(mut gicr_ptr: UniqueMmioPointer<Gicr>) {
-        // Wait until group not transitioning.
-        Self::gicr_wait_until_group_not_in_transit(&gicr_ptr);
-
-        // Power off the redistributor.
-        field!(gicr_ptr, pwrr).write(GicrPwrr::RedistributorPowerDown);
-
-        // If this is the last man, turning this redistributor frame off will
-        // result in the group itself being powered off and RDGPD = 1.
-        // In that case, wait as long as it's in transition, or has aborted
-        // the transition altogether for any reason.
-        if field_shared!(gicr_ptr, pwrr)
-            .read()
-            .contains(GicrPwrr::RedistributorGroupPowerDown)
-        {
-            Self::gicr_wait_until_group_not_in_transit(&gicr_ptr);
-        }
+        self.redistributor(cpu).wait_for_pending_write();
     }
 
     /// Power on GIC-600 or GIC-700 redistributor (if detected).
     pub fn gicr_power_on(&mut self, cpu: usize) {
-        let gicr_ptr = self.gicr_ptr(cpu);
-
-        if Self::gicr_needs_power_management(&gicr_ptr) {
-            Self::gic600_gic700_gicr_power_on(gicr_ptr);
-        }
+        self.redistributor(cpu).power_on();
     }
 
     /// Power off GIC-600 or GIC-700 redistributor (if detected).
     pub fn gicr_power_off(&mut self, cpu: usize) {
-        let gicr_ptr = self.gicr_ptr(cpu);
-
-        if Self::gicr_needs_power_management(&gicr_ptr) {
-            Self::gic600_gic700_gicr_power_off(gicr_ptr);
-        }
+        self.redistributor(cpu).power_off();
     }
 
     /// Informs the GIC redistributor that the core has awakened.
     ///
     /// Blocks until `GICR_WAKER.ChildrenAsleep` is cleared.
     pub fn redistributor_mark_core_awake(&mut self, cpu: usize) -> Result<(), GICRError> {
-        let mut gicr = self.gicr_ptr(cpu);
-        let mut waker = field!(gicr, waker);
-        let mut gicr_waker = waker.read();
-
-        // The WAKER_PS_BIT should be changed to 0 only when WAKER_CA_BIT is 1.
-        if !gicr_waker.contains(Waker::CHILDREN_ASLEEP) {
-            return Err(GICRError::AlreadyAwake);
-        }
-
-        // Mark the connected core as awake.
-        gicr_waker -= Waker::PROCESSOR_SLEEP;
-        waker.write(gicr_waker);
-
-        // Wait till the WAKER_CA_BIT changes to 0.
-        while waker.read().contains(Waker::CHILDREN_ASLEEP) {
-            spin_loop();
-        }
-
-        Ok(())
+        self.redistributor(cpu).mark_core_awake()
     }
 
     /// Informs the GIC redistributor that the core is asleep.
     ///
     /// Blocks until `GICR_WAKER.ChildrenAsleep` is set.
     pub fn redistributor_mark_core_asleep(&mut self, cpu: usize) -> Result<(), GICRError> {
-        let mut gicr = self.gicr_ptr(cpu);
-        let mut waker = field!(gicr, waker);
-        let mut gicr_waker = waker.read();
-
-        // The WAKER_PS_BIT should be changed to 1 only when WAKER_CA_BIT is 0.
-        if gicr_waker.contains(Waker::CHILDREN_ASLEEP) {
-            return Err(GICRError::AlreadyAsleep);
-        }
-
-        // Mark the connected core as asleep.
-        gicr_waker |= Waker::PROCESSOR_SLEEP;
-        waker.write(gicr_waker);
-
-        // Wait till the WAKER_CA_BIT changes to 1.
-        while !waker.read().contains(Waker::CHILDREN_ASLEEP) {
-            spin_loop();
-        }
-
-        Ok(())
+        self.redistributor(cpu).mark_core_asleep()
     }
 }
 

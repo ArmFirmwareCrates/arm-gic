@@ -40,7 +40,7 @@ impl Debug for GicdCtlr {
     }
 }
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
+#[derive(Copy, Clone, Default, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 pub struct GicrCtlr(u32);
 
 bitflags! {
@@ -438,6 +438,7 @@ bitflags! {
 }
 
 /// GIC Redistributor, SGI and PPI registers.
+#[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 #[repr(C, align(8))]
 pub struct GicrSgi {
     pub gicr: Gicr,
@@ -445,6 +446,7 @@ pub struct GicrSgi {
 }
 
 /// GIC Redistributor registers.
+#[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 #[repr(C, align(8))]
 pub struct Gicr {
     /// Redistributor control register.
@@ -499,6 +501,7 @@ pub struct Gicr {
 }
 
 /// GIC Redistributor SGI and PPI registers.
+#[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 #[repr(C, align(8))]
 pub struct Sgi {
     _reserved0: [u32; 32],
@@ -544,6 +547,18 @@ pub struct Sgi {
     _reserved13: [u32; 12],
 }
 
+impl Sgi {
+    pub const IGROUPR_BITS: usize = 1;
+    pub const ISENABLER_BITS: usize = 1;
+    pub const ICENABLER_BITS: usize = 1;
+    pub const ISPENDR_BITS: usize = 1;
+    pub const ISACTIVER_BITS: usize = 1;
+    pub const ICACTIVER_BITS: usize = 1;
+    pub const IPRIORITY_BITS: usize = 8;
+    pub const ICFGR_BITS: usize = 2;
+    pub const IGRPMODR_BITS: usize = 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,7 +593,7 @@ mod tests {
 
     #[test]
     fn gicr_typer_affinity() {
-        let gicr_typer = GicrTyper(0x12_34_56_78_c0ffeeee);
+        let gicr_typer = GicrTyper(0x12_34_56_78_c0_ff_ee_ee);
 
         // Level 0 is 0x78, Level 1 is 0x56, etc.
         let expected_affinity_values = [0x78, 0x56, 0x34, 0x12];

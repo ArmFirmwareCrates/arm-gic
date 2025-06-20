@@ -184,9 +184,27 @@ impl IntId {
         Self::PPI_START <= self.0 && self.0 < Self::SPI_START
     }
 
-    /// Returns whether this interrupt ID is private to a core, i.e. it is an SGI or PPI.
+    /// Returns whether this interrupt ID is for an Extended Private Peripheral Interrupt.
+    pub const fn is_eppi(self) -> bool {
+        Self::EPPI_START <= self.0 && self.0 < Self::EPPI_END
+    }
+
+    /// Returns whether this interrupt ID is private to a core, i.e. it is an SGI, PPI or EPPI.
     pub const fn is_private(self) -> bool {
-        self.is_sgi() || self.is_ppi()
+        self.is_sgi() || self.is_ppi() || self.is_eppi()
+    }
+
+    /// Maps SGI, PPI and EPPI interrupt IDs into a continuous index range starting from 0,
+    /// making it ideal for indexing redistributor registers.
+    pub const fn private_index(self) -> Option<usize> {
+        if self.is_sgi() || self.is_ppi() {
+            Some(self.0 as usize)
+        } else if self.is_eppi() {
+            // EPPI
+            Some((self.0 - IntId::EPPI_START + IntId::SGI_COUNT + IntId::PPI_COUNT) as usize)
+        } else {
+            None
+        }
     }
 
     /// Returns whether this interrupt ID is for a Shared Peripheral Interrupt.
