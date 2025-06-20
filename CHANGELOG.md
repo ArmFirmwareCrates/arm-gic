@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+### Breaking changes
+
+- Use safe-mmio fields in Sgi and merge PPI registers.
+
 ## 0.6.1
 
 ### Organisational

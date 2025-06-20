@@ -157,7 +157,7 @@ impl GicV3<'_> {
             // Put all SGIs and PPIs into non-secure group 1.
             for cpu in 0..self.cpu_count {
                 let mut sgi = self.sgi_ptr(cpu);
-                field!(sgi, igroupr0).write(0xffffffff);
+                field!(sgi, igroupr).get(0).unwrap().write(0xffffffff);
             }
         }
         // Put all SPIs into non-secure group 1.
@@ -195,9 +195,9 @@ impl GicV3<'_> {
         if intid.is_private() {
             let mut sgi = self.sgi_ptr(cpu.unwrap());
             if enable {
-                set_bit(field!(sgi, isenabler0).into(), intid.0 as usize);
+                set_bit(field!(sgi, isenabler).into(), intid.0 as usize);
             } else {
-                set_bit(field!(sgi, icenabler0).into(), intid.0 as usize);
+                set_bit(field!(sgi, icenabler).into(), intid.0 as usize);
             }
         } else if enable {
             set_bit(field!(self.gicd, isenabler).into(), intid.0 as usize);
@@ -232,9 +232,9 @@ impl GicV3<'_> {
         for cpu in 0..self.cpu_count {
             let mut sgi = self.sgi_ptr(cpu);
             if enable {
-                field!(sgi, isenabler0).write(0xffffffff);
+                field!(sgi, isenabler).get(0).unwrap().write(0xffffffff);
             } else {
-                field!(sgi, icenabler0).write(0xffffffff);
+                field!(sgi, icenabler).get(0).unwrap().write(0xffffffff);
             }
         }
     }
@@ -298,15 +298,15 @@ impl GicV3<'_> {
         if intid.is_private() {
             let mut sgi = self.sgi_ptr(cpu.unwrap());
             if let Group::Secure(sg) = group {
-                clear_bit(field!(sgi, igroupr0).into(), intid.0 as usize);
-                let igrpmodr = field!(sgi, igrpmodr0).into();
+                clear_bit(field!(sgi, igroupr).into(), intid.0 as usize);
+                let igrpmodr = field!(sgi, igrpmodr).into();
                 match sg {
                     SecureIntGroup::Group1S => set_bit(igrpmodr, intid.0 as usize),
                     SecureIntGroup::Group0 => clear_bit(igrpmodr, intid.0 as usize),
                 }
             } else {
-                set_bit(field!(sgi, igroupr0).into(), intid.0 as usize);
-                clear_bit(field!(sgi, igrpmodr0).into(), intid.0 as usize);
+                set_bit(field!(sgi, igroupr).into(), intid.0 as usize);
+                clear_bit(field!(sgi, igrpmodr).into(), intid.0 as usize);
             }
         } else if let Group::Secure(sg) = group {
             let igroupr = field!(self.gicd, igroupr);
