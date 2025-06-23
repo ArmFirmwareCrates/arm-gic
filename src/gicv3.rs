@@ -88,22 +88,420 @@ const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
 /// Read register and store it in a context structure.
 macro_rules! save_reg {
-    ($context:ident, $regs:ident, $reg:ident) => {
+    ($context:ident, $regs:expr, $reg:ident) => {
         $context.$reg = field_shared!($regs, $reg).read();
     };
-    ($context:ident, $regs:ident, $reg:ident, $index:ident) => {
+    ($context:ident, $regs:expr, $reg:ident, $index:ident) => {
         $context.$reg[$index] = field_shared!($regs, $reg).split()[$index].read();
     };
 }
 
 /// Restore register value from a context structure.
 macro_rules! restore_reg {
-    ($context:ident, $regs:ident, $reg:ident) => {
+    ($context:ident, $regs:expr, $reg:ident) => {
         field!($regs, $reg).write($context.$reg);
     };
-    ($context:ident, $regs:ident, $reg:ident, $index:ident) => {
+    ($context:ident, $regs:expr, $reg:ident, $index:ident) => {
         field!($regs, $reg).split()[$index].write($context.$reg[$index]);
     };
+}
+
+macro_rules! save_gicd_regs {
+    ($context:ident, $regs:expr, $reg:ident, $int_count:ident, $eint_count:ident, $bits_per_int:expr) => {
+        let int_per_regs = core::mem::size_of_val(&$context.$reg[0]) / $bits_per_int;
+
+        for i in 0..($int_count / int_per_regs) {
+            $context.$reg[i] = field_shared!($regs, $reg).split()[i].read();
+        }
+
+        // TODO: extended int
+    };
+}
+
+macro_rules! restore_gicd_regs {
+    ($context:ident, $regs:expr, $reg:ident, $int_count:ident, $eint_count:ident, $bits_per_int:expr) => {
+        let int_per_regs = core::mem::size_of_val(&$context.$reg[0]) / $bits_per_int;
+
+        for i in 0..($int_count / int_per_regs) {
+            field!($regs, $reg).split()[i].write($context.$reg[i]);
+        }
+
+        // TODO: extended int
+    };
+}
+
+/// Context of the GIC distributor. It contains a set of registers that has to be save/restored on
+/// distributor power off/on.
+#[derive(Debug)]
+pub struct GicDistributorContext {
+    irouter: [u64; Self::INT_COUNT],
+    ctlr: GicdCtlr,
+    igroupr: [u32; Self::reg_count(Gicd::IGROUPR_BITS)],
+    isenabler: [u32; Self::reg_count(Gicd::ISENABLER_BITS)],
+    ispendr: [u32; Self::reg_count(Gicd::ISPENDR_BITS)],
+    isactiver: [u32; Self::reg_count(Gicd::ISACTIVER_BITS)],
+    icfgr: [u32; Self::reg_count(Gicd::ICFGR_BITS)],
+    igrpmodr: [u32; Self::reg_count(Gicd::IGRPMODR_BITS)],
+    nsacr: [u32; Self::reg_count(Gicd::NSACR_BITS)],
+    ipriorityr: [u8; Self::INT_COUNT],
+}
+
+impl GicDistributorContext {
+    // TODO: create extended INTID feature and set variable accordingly
+    const INT_COUNT: usize = 988;
+
+    /// Calculate the register count based on the bits per interrupt value.
+    const fn reg_count(bits_per_int: usize) -> usize {
+        Self::INT_COUNT * bits_per_int / 32
+    }
+}
+
+#[derive(Debug)]
+pub struct GicDistributor<'a> {
+    regs: UniqueMmioPointer<'a, Gicd>,
+}
+
+impl<'a> GicDistributor<'a> {
+    /// Create new driver instance.
+    pub fn new(regs: UniqueMmioPointer<'a, Gicd>) -> Self {
+        Self { regs }
+    }
+
+    pub fn init(&mut self) {
+        let reg_count = (self.num_spi() / 32) as usize;
+
+        // Clear the "enable" bits for G0/G1S/G1NS interrupts before configuring the ARE_S bit. The
+        // Distributor might generate a system error otherwise.
+        self.set_control(
+            GicdCtlr::EnableGrp0 | GicdCtlr::EnableGrp1S | GicdCtlr::EnableGrp1NS | GicdCtlr::RWP,
+            false,
+        );
+
+        // Set the ARE_S and ARE_NS bit now that interrupts have been disabled
+        self.set_control(GicdCtlr::ARE_S | GicdCtlr::ARE_NS, true);
+
+        // Treat all (E)SPIs as G1NS by default. We do 32 at a time.
+        for i in (IntId::SPI_START as usize * Gicd::IGROUPR_BITS)..(reg_count * Gicd::IGROUPR_BITS)
+        {
+            field!(self.regs, igroupr).split()[i].write(0xffff_ffff)
+        }
+
+        for i in (IntId::SPI_START as usize)..((IntId::SPI_START + IntId::MAX_SPI_COUNT) as usize) {
+            field!(self.regs, ipriorityr).split()[i].write(HIGHEST_NS_PRIORITY);
+        }
+
+        // Treat all (E)SPIs as level triggered by default, write 16 at a time
+        for i in (IntId::SPI_START as usize * Gicd::ICFGR_BITS)..(reg_count * Gicd::ICFGR_BITS) {
+            field!(self.regs, icfgr).split()[i].write(0x0000_0000);
+        }
+
+        // TODO: handle ESPI
+
+        // Enable the secure (E)SPIs now that they have been configured
+        self.wait_for_pending_write();
+    }
+
+    /// Returns information about what the GIC implementation supports.
+    fn typer(&self) -> Typer {
+        field_shared!(self.regs, typer).read()
+    }
+
+    pub fn enable_affinity_routing_non_secure(&mut self, enable: bool) {
+        self.set_control(GicdCtlr::ARE_NS, enable);
+    }
+
+    pub fn enable_affinity_routing_secure(&mut self, enable: bool) {
+        self.set_control(GicdCtlr::ARE_S, enable);
+    }
+
+    pub fn enable_group1_secure(&mut self, enable: bool) {
+        self.set_control(GicdCtlr::EnableGrp1S, enable);
+    }
+
+    pub fn enable_group1_non_secure(&mut self, enable: bool) {
+        self.set_control(GicdCtlr::EnableGrp1NS, enable);
+    }
+
+    pub fn enable_group0(&mut self, enable: bool) {
+        self.set_control(GicdCtlr::EnableGrp0, enable);
+    }
+
+    fn set_control(&mut self, bits: GicdCtlr, enable: bool) {
+        self.modify_control(|mut gicd_ctlr| {
+            gicd_ctlr.set(bits, enable);
+            gicd_ctlr
+        });
+    }
+
+    fn modify_control(&mut self, f: impl FnOnce(GicdCtlr) -> GicdCtlr) {
+        let gicd_ctlr = field_shared!(self.regs, ctlr).read();
+
+        field!(self.regs, ctlr).write(f(gicd_ctlr));
+
+        self.wait_for_pending_write();
+    }
+
+    /// Sets the priority of the interrupt with the given ID.
+    ///
+    /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and
+    /// 255 is the lowest.
+    pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) {
+        let index = intid.shared_index();
+        field!(self.regs, ipriorityr).split()[index].write(priority);
+    }
+
+    /// Configures the trigger type for the interrupt with the given ID.
+    pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) {
+        let index = intid.shared_index();
+
+        const INT_PER_REGS: usize = 32 / Sgi::ICFGR_BITS;
+        let reg_index = index / INT_PER_REGS;
+        let bit = 1 << (((index % INT_PER_REGS) * Sgi::ICFGR_BITS) + 1);
+
+        let mut icfgr = field!(self.regs, icfgr);
+        let mut register = icfgr.get(reg_index).unwrap();
+        let v = register.read();
+        register.write(match trigger {
+            Trigger::Edge => v | bit,
+            Trigger::Level => v & !bit,
+        });
+    }
+
+    /// Assigns the interrupt with id `intid` to interrupt group `group`.
+    pub fn set_group(&mut self, intid: IntId, group: Group) {
+        let index = intid.shared_index();
+
+        if let Group::Secure(sg) = group {
+            clear_bit(field!(self.regs, igroupr).into(), index);
+            let igrpmodr = field!(self.regs, igrpmodr).into();
+            match sg {
+                SecureIntGroup::Group1S => set_bit(igrpmodr, index),
+                SecureIntGroup::Group0 => clear_bit(igrpmodr, index),
+            }
+        } else {
+            set_bit(field!(self.regs, igroupr).into(), index);
+            clear_bit(field!(self.regs, igrpmodr).into(), index);
+        }
+    }
+
+    /// Enables or disables the interrupt with the given ID.
+    pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) {
+        let index = intid.shared_index();
+
+        if enable {
+            set_bit(field!(self.regs, isenabler).into(), index);
+        } else {
+            set_bit(field!(self.regs, icenabler).into(), index);
+        }
+    }
+
+    /// Enables or disables all interrupts on the distributor.
+    pub fn enable_all_interrupts(&mut self, enable: bool) {
+        for i in 1..32 {
+            if enable {
+                field!(self.regs, isenabler)
+                    .get(i)
+                    .unwrap()
+                    .write(0xffffffff);
+            } else {
+                field!(self.regs, icenabler)
+                    .get(i)
+                    .unwrap()
+                    .write(0xffffffff);
+            }
+        }
+    }
+
+    pub fn init_restore(&mut self, context: &GicDistributorContext) {
+        // Clear the "enable" bits for G0/G1S/G1NS interrupts before configuring the ARE_S bit. The
+        // Distributor might generate a system error otherwise.
+        self.set_control(
+            GicdCtlr::EnableGrp0 | GicdCtlr::EnableGrp1S | GicdCtlr::EnableGrp1NS | GicdCtlr::RWP,
+            false,
+        );
+
+        // Set the ARE_S and ARE_NS bit now that interrupts have been disabled
+        self.set_control(GicdCtlr::ARE_S | GicdCtlr::ARE_NS, true);
+
+        let int_count = self.num_spi() as usize;
+        let eint_count = 0; // TODO:
+
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            igroupr,
+            int_count,
+            eint_count,
+            Gicd::IGROUPR_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            ipriorityr,
+            int_count,
+            eint_count,
+            Gicd::IPRIORITY_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            icfgr,
+            int_count,
+            eint_count,
+            Gicd::ICFGR_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            igrpmodr,
+            int_count,
+            eint_count,
+            Gicd::IGRPMODR_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            nsacr,
+            int_count,
+            eint_count,
+            Gicd::NSACR_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            irouter,
+            int_count,
+            eint_count,
+            Gicd::IROUTER_BITS
+        );
+
+        // Restore ISENABLER(E), ISPENDR(E) and ISACTIVER(E) after the interrupts are configured.
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            isenabler,
+            int_count,
+            eint_count,
+            Gicd::ISENABLER_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            ispendr,
+            int_count,
+            eint_count,
+            Gicd::ISPENDR_BITS
+        );
+        restore_gicd_regs!(
+            context,
+            self.regs,
+            isactiver,
+            int_count,
+            eint_count,
+            Gicd::ISACTIVER_BITS
+        );
+
+        // Restore the GICD_CTLR
+        restore_reg!(context, self.regs, ctlr);
+        self.wait_for_pending_write();
+    }
+
+    pub fn save(&self, context: &mut GicDistributorContext) {
+        let int_count = self.num_spi() as usize;
+        let eint_count = 0; // TODO:
+
+        self.wait_for_pending_write();
+
+        // Save the GICD_CTLR
+        save_reg!(context, self.regs, ctlr);
+
+        save_gicd_regs!(
+            context,
+            self.regs,
+            igroupr,
+            int_count,
+            eint_count,
+            Gicd::IGROUPR_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            isenabler,
+            int_count,
+            eint_count,
+            Gicd::ISENABLER_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            ispendr,
+            int_count,
+            eint_count,
+            Gicd::ISPENDR_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            isactiver,
+            int_count,
+            eint_count,
+            Gicd::ISACTIVER_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            ipriorityr,
+            int_count,
+            eint_count,
+            Gicd::IPRIORITY_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            icfgr,
+            int_count,
+            eint_count,
+            Gicd::ICFGR_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            igrpmodr,
+            int_count,
+            eint_count,
+            Gicd::IGRPMODR_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            nsacr,
+            int_count,
+            eint_count,
+            Gicd::NSACR_BITS
+        );
+        save_gicd_regs!(
+            context,
+            self.regs,
+            irouter,
+            int_count,
+            eint_count,
+            Gicd::IROUTER_BITS
+        );
+    }
+
+    /// Waits until a register write for the current Security state is in progress.
+    pub fn wait_for_pending_write(&self) {
+        let ctlr = field_shared!(self.regs, ctlr);
+        while ctlr.read().contains(GicdCtlr::RWP) {
+            spin_loop();
+        }
+    }
+
+    /// Returns the interrupt register count based on GICD_TYPER.ItlLinesNumber.
+    fn num_spi(&self) -> u32 {
+        let typer = field_shared!(self.regs, typer).read();
+        typer.num_spis()
+    }
 }
 
 /// Context of the GIC redistributor. It contains a set of registers that has to be save/restored
@@ -177,6 +575,10 @@ impl<'a> GicRedistributor<'a> {
         }
     }
 
+    /// Sets the priority of the interrupt with the given ID.
+    ///
+    /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and
+    /// 255 is the lowest.
     pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) {
         let index = intid.private_index();
         let mut sgi = field!(self.regs, sgi);
@@ -591,7 +993,7 @@ impl GicCpuInterface {
 /// Driver for an Arm Generic Interrupt Controller version 3 (or 4).
 #[derive(Debug)]
 pub struct GicV3<'a> {
-    gicd: UniqueMmioPointer<'a, Gicd>,
+    gicd: GicDistributor<'a>,
     gicr_base: *mut GicrSgi,
     /// The number of CPU cores, and hence redistributors.
     cpu_count: usize,
@@ -618,7 +1020,9 @@ impl GicV3<'_> {
         Self {
             // SAFETY: Our caller promised that `gicd` is a valid and unique pointer to a GIC
             // distributor.
-            gicd: unsafe { UniqueMmioPointer::new(NonNull::new(gicd).unwrap()) },
+            gicd: GicDistributor::new(unsafe {
+                UniqueMmioPointer::new(NonNull::new(gicd).unwrap())
+            }),
             gicr_base,
             cpu_count,
             gicr_stride: get_redistributor_window_size(gicr_base, gic_v4),
@@ -654,19 +1058,14 @@ impl GicV3<'_> {
     pub fn setup(&mut self, cpu: usize) {
         self.init_cpu(cpu);
 
-        // Enable affinity routing and non-secure group 1 interrupts.
-        field!(self.gicd, ctlr).write(GicdCtlr::ARE_S | GicdCtlr::EnableGrp1NS);
-
         {
             // Init redistributors
             for cpu in 0..self.cpu_count {
                 GicRedistributor::new(self.gicr_sgi_ptr(cpu)).init();
             }
         }
-        // Put all SPIs into non-secure group 1.
-        for i in 1..32 {
-            field!(self.gicd, igroupr).get(i).unwrap().write(0xffffffff);
-        }
+
+        self.gicd.init();
 
         // Enable group 1 for the current security state.
         Self::enable_group1(true);
@@ -689,28 +1088,15 @@ impl GicV3<'_> {
     pub fn enable_interrupt(&mut self, intid: IntId, cpu: Option<usize>, enable: bool) {
         if intid.is_private() {
             GicRedistributor::new(self.gicr_sgi_ptr(cpu.unwrap())).enable_interrupt(intid, enable);
-        } else if enable {
-            set_bit(field!(self.gicd, isenabler).into(), intid.0 as usize);
         } else {
-            set_bit(field!(self.gicd, icenabler).into(), intid.0 as usize);
-        };
+            self.gicd.enable_interrupt(intid, enable);
+        }
     }
 
     /// Enables or disables all interrupts on all CPU cores.
     pub fn enable_all_interrupts(&mut self, enable: bool) {
-        for i in 1..32 {
-            if enable {
-                field!(self.gicd, isenabler)
-                    .get(i)
-                    .unwrap()
-                    .write(0xffffffff);
-            } else {
-                field!(self.gicd, icenabler)
-                    .get(i)
-                    .unwrap()
-                    .write(0xffffffff);
-            }
-        }
+        self.gicd.enable_all_interrupts(enable);
+
         for cpu in 0..self.cpu_count {
             GicRedistributor::new(self.gicr_sgi_ptr(cpu)).enable_all_interrupts(enable);
         }
@@ -733,29 +1119,17 @@ impl GicV3<'_> {
             GicRedistributor::new(self.gicr_sgi_ptr(cpu.unwrap()))
                 .set_interrupt_priority(intid, priority);
         } else {
-            field!(self.gicd, ipriorityr)
-                .get(intid.0 as usize)
-                .unwrap()
-                .write(priority);
+            self.gicd.set_interrupt_priority(intid, priority);
         }
     }
 
     /// Configures the trigger type for the interrupt with the given ID.
     pub fn set_trigger(&mut self, intid: IntId, cpu: Option<usize>, trigger: Trigger) {
-        let index = (intid.0 / 16) as usize;
-        let bit = 1 << (((intid.0 % 16) * 2) + 1);
-
         // Affinity routing is enabled, so use the GICR for SGIs and PPIs.
         if intid.is_private() {
             GicRedistributor::new(self.gicr_sgi_ptr(cpu.unwrap())).set_trigger(intid, trigger);
         } else {
-            let mut icfgr = field!(self.gicd, icfgr);
-            let mut register = icfgr.get(index).unwrap();
-            let v = register.read();
-            register.write(match trigger {
-                Trigger::Edge => v | bit,
-                Trigger::Level => v & !bit,
-            });
+            self.gicd.set_trigger(intid, trigger);
         };
     }
 
@@ -763,17 +1137,8 @@ impl GicV3<'_> {
     pub fn set_group(&mut self, intid: IntId, cpu: Option<usize>, group: Group) {
         if intid.is_private() {
             GicRedistributor::new(self.gicr_sgi_ptr(cpu.unwrap())).set_group(intid, group);
-        } else if let Group::Secure(sg) = group {
-            let igroupr = field!(self.gicd, igroupr);
-            clear_bit(igroupr.into(), intid.0 as usize);
-            let igrpmodr = field!(self.gicd, igrpmodr);
-            match sg {
-                SecureIntGroup::Group1S => set_bit(igrpmodr.into(), intid.0 as usize),
-                SecureIntGroup::Group0 => clear_bit(igrpmodr.into(), intid.0 as usize),
-            }
         } else {
-            set_bit(field!(self.gicd, igroupr).into(), intid.0 as usize);
-            clear_bit(field!(self.gicd, igrpmodr).into(), intid.0 as usize);
+            self.gicd.set_group(intid, group);
         };
     }
 
@@ -841,15 +1206,7 @@ impl GicV3<'_> {
 
     /// Returns information about what the GIC implementation supports.
     pub fn typer(&self) -> Typer {
-        field_shared!(self.gicd, typer).read()
-    }
-
-    /// Returns a pointer to the GIC distributor registers.
-    ///
-    /// This may be used to read and write the registers directly for functionality not yet
-    /// supported by this driver.
-    pub fn gicd_ptr(&mut self) -> UniqueMmioPointer<Gicd> {
-        self.gicd.reborrow()
+        self.gicd.typer()
     }
 
     /// Returns a pointer to the GIC redistributor, SGI and PPI registers.
@@ -866,28 +1223,17 @@ impl GicV3<'_> {
 
     /// Blocks until register write for the current Security state is no longer in progress.
     pub fn gicd_barrier(&self) {
-        while field_shared!(self.gicd, ctlr)
-            .read()
-            .contains(GicdCtlr::RWP)
-        {}
-    }
-
-    fn gicd_modify_control(&mut self, f: impl FnOnce(GicdCtlr) -> GicdCtlr) {
-        let gicd_ctlr = field_shared!(self.gicd, ctlr).read();
-
-        field!(self.gicd, ctlr).write(f(gicd_ctlr));
-
-        self.gicd_barrier();
+        self.gicd.wait_for_pending_write();
     }
 
     /// Clears specified bits in GIC distributor control register.
     pub fn gicd_clear_control(&mut self, flags: GicdCtlr) {
-        self.gicd_modify_control(|old| old - flags);
+        self.gicd.modify_control(|old| old - flags);
     }
 
     /// Sets specified bits in GIC distributor control register.
     pub fn gicd_set_control(&mut self, flags: GicdCtlr) {
-        self.gicd_modify_control(|old| old | flags);
+        self.gicd.modify_control(|old| old | flags);
     }
 
     /// Blocks until register write for the current Security state is no longer in progress.
