@@ -14,7 +14,7 @@ use safe_mmio::fields::{ReadPure, ReadPureWrite, WriteOnly};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
+#[derive(Copy, Clone, Default, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 pub struct GicdCtlr(u32);
 
 bitflags! {
@@ -252,6 +252,7 @@ pub enum RangeSelectorSupport {
 }
 
 /// GIC Distributor registers.
+#[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 #[repr(C, align(8))]
 pub struct Gicd {
     /// Distributor control register.
@@ -259,25 +260,25 @@ pub struct Gicd {
     /// Interrupt controller type register.
     pub typer: ReadPure<Typer>,
     /// Distributor implementer identification register.
-    pub iidr: u32,
+    pub iidr: ReadPure<u32>,
     /// Interrupt controller type register 2.
-    pub typer2: u32,
+    pub typer2: ReadPure<u32>,
     /// Error reporting status register.
-    pub statusr: u32,
+    pub statusr: ReadPureWrite<u32>,
     _reserved0: [u32; 3],
     /// Implementation defined registers.
     pub implementation_defined: [u32; 8],
     /// Set SPI register.
-    pub setspi_nsr: u32,
+    pub setspi_nsr: WriteOnly<u32>,
     _reserved1: u32,
     /// Clear SPI register.
-    pub clrspi_nsr: u32,
+    pub clrspi_nsr: WriteOnly<u32>,
     _reserved2: u32,
     /// Set SPI secure register.
-    pub setspi_sr: u32,
+    pub setspi_sr: WriteOnly<u32>,
     _reserved3: u32,
     /// Clear SPI secure register.
-    pub clrspi_sr: u32,
+    pub clrspi_sr: WriteOnly<u32>,
     _reserved4: [u32; 9],
     /// Interrupt group registers.
     pub igroupr: [ReadPureWrite<u32>; 32],
@@ -286,34 +287,34 @@ pub struct Gicd {
     /// Interrupt clear-enable registers.
     pub icenabler: [ReadPureWrite<u32>; 32],
     /// Interrupt set-pending registers.
-    pub ispendr: [u32; 32],
+    pub ispendr: [ReadPureWrite<u32>; 32],
     /// Interrupt clear-pending registers.
-    pub icpendr: [u32; 32],
+    pub icpendr: [ReadPureWrite<u32>; 32],
     /// Interrupt set-active registers.
-    pub isactiver: [u32; 32],
+    pub isactiver: [ReadPureWrite<u32>; 32],
     /// Interrupt clear-active registers.
-    pub icactiver: [u32; 32],
+    pub icactiver: [ReadPureWrite<u32>; 32],
     /// Interrupt priority registers.
     pub ipriorityr: [ReadPureWrite<u8>; 1024],
     /// Interrupt processor targets registers.
-    pub itargetsr: [u32; 256],
+    pub itargetsr: [ReadPure<u32>; 256],
     /// Interrupt configuration registers.
     pub icfgr: [ReadPureWrite<u32>; 64],
     /// Interrupt group modifier registers.
     pub igrpmodr: [ReadPureWrite<u32>; 32],
     _reserved5: [u32; 32],
     /// Non-secure access control registers.
-    pub nsacr: [u32; 64],
+    pub nsacr: [ReadPureWrite<u32>; 64],
     /// Software generated interrupt register.
     pub sigr: u32,
     _reserved6: [u32; 3],
     /// SGI clear-pending registers.
-    pub cpendsgir: [u32; 4],
+    pub cpendsgir: [ReadPureWrite<u32>; 4],
     /// SGI set-pending registers.
-    pub spendsgir: [u32; 4],
+    pub spendsgir: [ReadPureWrite<u32>; 4],
     _reserved7: [u32; 20],
     /// Non-maskable interrupt registers.
-    pub inmir: [u32; 32],
+    pub inmir: [ReadPureWrite<u32>; 32],
     /// Interrupt group registers for extended SPI range.
     pub igroupr_e: [ReadPureWrite<u32>; 32],
     _reserved8: [u32; 96],
@@ -324,16 +325,16 @@ pub struct Gicd {
     pub icenabler_e: [ReadPureWrite<u32>; 32],
     _reserved10: [u32; 96],
     /// Interrupt set-pending registers for extended SPI range.
-    pub ispendr_e: [u32; 32],
+    pub ispendr_e: [ReadPureWrite<u32>; 32],
     _reserved11: [u32; 96],
     /// Interrupt clear-pending registers for extended SPI range.
-    pub icpendr_e: [u32; 32],
+    pub icpendr_e: [ReadPureWrite<u32>; 32],
     _reserved12: [u32; 96],
     /// Interrupt set-active registers for extended SPI range.
-    pub isactive_e: [u32; 32],
+    pub isactiver_e: [ReadPureWrite<u32>; 32],
     _reserved13: [u32; 96],
     /// Interrupt clear-active registers for extended SPI range.
-    pub icactive_e: [u32; 32],
+    pub icactive_e: [ReadPureWrite<u32>; 32],
     _reserved14: [u32; 224],
     /// Interrupt priority registers for extended SPI range.
     pub ipriorityr_e: [ReadPureWrite<u8>; 1024],
@@ -345,21 +346,35 @@ pub struct Gicd {
     pub igrpmodr_e: [ReadPureWrite<u32>; 32],
     _reserved17: [u32; 96],
     /// Non-secure access control registers for extended SPI range.
-    pub nsacr_e: [u32; 32],
+    pub nsacr_e: [ReadPureWrite<u32>; 32],
     _reserved18: [u32; 288],
     /// Non-maskable interrupt registers for extended SPI range.
-    pub inmr_e: [u32; 32],
+    pub inmr_e: [ReadPureWrite<u32>; 32],
     _reserved19: [u32; 2400],
     /// Interrupt routing registers.
-    pub irouter: [u64; 988],
+    pub irouter: [ReadPureWrite<u64>; 988],
     _reserved20: [u32; 8],
     /// Interrupt routing registers for extended SPI range.
-    pub irouter_e: [u64; 1024],
+    pub irouter_e: [ReadPureWrite<u64>; 1024],
     _reserved21: [u32; 2048],
     /// Implementation defined registers.
     pub implementation_defined2: [u32; 4084],
     /// ID registers.
-    pub id_registers: [u32; 12],
+    pub id_registers: [ReadPure<u32>; 12],
+}
+
+impl Gicd {
+    pub const IGROUPR_BITS: usize = 1;
+    pub const ISENABLER_BITS: usize = 1;
+    pub const ICENABLER_BITS: usize = 1;
+    pub const ISPENDR_BITS: usize = 1;
+    pub const ISACTIVER_BITS: usize = 1;
+    pub const ICACTIVER_BITS: usize = 1;
+    pub const IPRIORITY_BITS: usize = 8;
+    pub const ICFGR_BITS: usize = 2;
+    pub const IGRPMODR_BITS: usize = 1;
+    pub const NSACR_BITS : usize = 2;
+    pub const IROUTER_BITS: usize = 64;
 }
 
 #[repr(transparent)]
