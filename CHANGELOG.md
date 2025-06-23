@@ -7,6 +7,7 @@
 - Use safe-mmio fields in Sgi and merge PPI registers.
 - Change `GicV3` getters to return component driver instances instead of raw register blocks.
   - `GicV3::gicr_ptr()`, `GicV3::sgi_ptr()` -> `GicV3::redistributor()`
+  - `GicV3::gicd_ptr()` -> `GicV3::distributor()`
 - Change CPU interface system register types.
 - Move CPU interface functions from `GicV3` into `GicCpuInterface`
   - `GicV3::enable_group0` -> `GicCpuInterface::enable_group0`

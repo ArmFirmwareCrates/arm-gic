@@ -189,6 +189,16 @@ impl IntId {
         Self::EPPI_START <= self.0 && self.0 < Self::EPPI_END
     }
 
+    /// Returns whether this interrupt ID is for a Shared Peripheral Interrupt.
+    pub const fn is_spi(self) -> bool {
+        Self::SPI_START <= self.0 && self.0 < Self::SPECIAL_START
+    }
+
+    /// Returns whether this interrupt ID is for an Extended Shared Peripheral Interrupt.
+    pub const fn is_espi(self) -> bool {
+        Self::ESPI_START <= self.0 && self.0 < Self::ESPI_END
+    }
+
     /// Returns whether this interrupt ID is private to a core, i.e. it is an SGI, PPI or EPPI.
     pub const fn is_private(self) -> bool {
         self.is_sgi() || self.is_ppi() || self.is_eppi()
@@ -216,9 +226,13 @@ impl IntId {
         }
     }
 
-    /// Returns whether this interrupt ID is for a Shared Peripheral Interrupt.
-    pub const fn is_spi(self) -> bool {
-        Self::SPI_START <= self.0 && self.0 < Self::SPECIAL_START
+    /// Returns ESPI index or `None` if it is not an ESPI interrupt ID.
+    pub const fn espi_index(self) -> Option<usize> {
+        if self.is_espi() {
+            Some((self.0 - Self::ESPI_START) as usize)
+        } else {
+            None
+        }
     }
 
     // TODO: Change this to return a Range<IntId> once core::iter::Step is stabilised.
