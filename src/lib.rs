@@ -195,6 +195,11 @@ impl IntId {
         self.is_sgi() || self.is_ppi() || self.is_eppi()
     }
 
+    pub const fn sgi_index(self) -> u32 {
+        assert!(self.is_sgi());
+        self.0 - Self::SGI_START
+    }
+
     pub const fn private_index(self) -> usize {
         assert!(self.is_private());
 
