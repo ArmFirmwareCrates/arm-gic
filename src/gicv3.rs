@@ -8,10 +8,12 @@ pub mod registers;
 
 use self::registers::{Gicd, GicdCtlr, GicrCtlr, Sgi, Waker};
 use crate::sysreg::{
-    read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
-    write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
-    write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1,
-    write_icc_sgi1r_el1, write_icc_sre_el1, IccSre
+    IccIgrpen1El3, IccIgrpenEl1, IccSreEl1, IccSreEl23, Sgir, read_icc_hppir0_el1,
+    read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1, read_icc_igrpen1_el3,
+    read_icc_sre_el1, read_icc_sre_el2, read_icc_sre_el3, write_icc_asgi1r_el1, write_icc_ctlr_el1,
+    write_icc_eoir0_el1, write_icc_eoir1_el1, write_icc_igrpen0_el1, write_icc_igrpen1_el1,
+    write_icc_igrpen1_el3, write_icc_pmr_el1, write_icc_sgi0r_el1, write_icc_sgi1r_el1,
+    write_icc_sre_el1, write_icc_sre_el2, write_icc_sre_el3,
 };
 use crate::{IntId, Trigger};
 use core::{hint::spin_loop, ptr::NonNull};
@@ -455,6 +457,137 @@ impl<'a> GicRedistributor<'a> {
     }
 }
 
+pub struct GicCpuInterface;
+
+impl GicCpuInterface {
+    /// Enables or disables group 0 interrupts.
+    pub fn enable_group0(enable: bool) {
+        write_icc_igrpen0_el1(if enable {
+            IccIgrpenEl1::EN
+        } else {
+            IccIgrpenEl1::empty()
+        });
+    }
+
+    /// Enables or disables group 1 interrupts for the current security state.
+    pub fn enable_group1(enable: bool) {
+        write_icc_igrpen1_el1(if enable {
+            IccIgrpenEl1::EN
+        } else {
+            IccIgrpenEl1::empty()
+        });
+    }
+
+    /// Enables or disables group 1 secure interrupts.
+    pub fn enable_group1_secure(enable: bool) {
+        let mut value = read_icc_igrpen1_el3();
+        value.set(IccIgrpen1El3::GRP1S, enable);
+        write_icc_igrpen1_el3(value);
+    }
+
+    /// Enables or disables group 1 non-secure interrupts.
+    pub fn enable_group1_non_secure(enable: bool) {
+        let mut value = read_icc_igrpen1_el3();
+        value.set(IccIgrpen1El3::GRP1NS, enable);
+        write_icc_igrpen1_el3(value);
+    }
+
+    /// Gets the ID of the highest priority pending group 0 interrupt on the CPU interface.
+    pub fn get_pending_interrupt_group0() -> IntId {
+        IntId(read_icc_hppir0_el1())
+    }
+
+    /// Gets the ID of the highest priority pending group 1 interrupt on the CPU interface.
+    pub fn get_pending_interrupt_group1() -> IntId {
+        IntId(read_icc_hppir1_el1())
+    }
+
+    /// Gets the ID of the highest priority signalled group 0 interrupt, and acknowledges it.
+    pub fn get_and_acknowledge_interrupt_group0() -> IntId {
+        IntId(read_icc_iar0_el1())
+    }
+
+    /// Gets the ID of the highest priority signalled group 1 interrupt, and acknowledges it.
+    pub fn get_and_acknowledge_interrupt_group1() -> IntId {
+        IntId(read_icc_iar1_el1())
+    }
+
+    /// Informs the interrupt controller that the CPU has completed processing the given group 0
+    /// interrupt. This drops the interrupt priority and deactivates the interrupt.
+    pub fn end_interrupt_group0(intid: IntId) {
+        write_icc_eoir0_el1(intid.0);
+    }
+
+    /// Informs the interrupt controller that the CPU has completed processing the given group 1
+    /// interrupt. This drops the interrupt priority and deactivates the interrupt.
+    pub fn end_interrupt_group1(intid: IntId) {
+        write_icc_eoir1_el1(intid.0);
+    }
+
+    /// Generates Secure Group 0 SGIs.
+    pub fn send_sgi_group0(sgir: Sgir) {
+        write_icc_sgi0r_el1(sgir);
+    }
+
+    /// Generates Group 1 SGIs for the current Security state.
+    pub fn send_sgi_current_group1(sgir: Sgir) {
+        write_icc_sgi1r_el1(sgir);
+    }
+
+    /// Generates Group 1 SGIs for the Security state that is not the current Security state.
+    pub fn send_sgi_other_group1(sgir: Sgir) {
+        write_icc_asgi1r_el1(sgir);
+    }
+
+    /// Sets the priority mask for the current CPU core.
+    ///
+    /// Only interrupts with a higher priority (numerically lower) will be signalled.
+    pub fn set_priority_mask(min_priority: u8) {
+        write_icc_pmr_el1(min_priority.into());
+    }
+
+    /// Enables or disables system register interface for the current Security state.
+    pub fn enable_system_register_el1(enable: bool) {
+        let mut value = read_icc_sre_el1();
+        value.set(IccSreEl1::SRE, enable);
+        write_icc_sre_el1(value);
+    }
+
+    /// Enables or disables the system register interface to the ICH_* registers and the EL1 and
+    /// EL2 ICC_* registers for EL2. The `enable_lower` parameter controls the lower exception level
+    /// access to ICC_SRE_EL1.
+    pub fn enable_system_register_el2(enable: bool, enable_lower: bool) {
+        let mut value = read_icc_sre_el2();
+        value.set(IccSreEl23::SRE, enable);
+        value.set(IccSreEl23::ENABLE, enable_lower);
+        write_icc_sre_el2(value);
+    }
+
+    /// Enables or disabled the system register interface to the ICH_* registers and the EL1, EL2,
+    /// and EL3 ICC_* registers for EL3. The `enable_lower` parameter controls the lower exception
+    /// level access to ICC_SRE_EL1 and ICC_SRE_EL2.
+    pub fn enable_system_register_el3(enable: bool, enable_lower: bool) {
+        let mut value = read_icc_sre_el2();
+        value.set(IccSreEl23::SRE, enable);
+        value.set(IccSreEl23::ENABLE, enable_lower);
+        write_icc_sre_el2(value);
+    }
+
+    /// Disable IRQ and FIQ bypass.
+    pub fn disable_legacy_interrupt_bypass_el2(disable: bool) {
+        let mut value = read_icc_sre_el2();
+        value.set(IccSreEl23::DFB | IccSreEl23::DIB, disable);
+        write_icc_sre_el2(value);
+    }
+
+    /// Disable IRQ and FIQ bypass.
+    pub fn disable_legacy_interrupt_bypass_el3(disable: bool) {
+        let mut value = read_icc_sre_el3();
+        value.set(IccSreEl23::DFB | IccSreEl23::DIB, disable);
+        write_icc_sre_el3(value);
+    }
+}
+
 /// Driver for an Arm Generic Interrupt Controller version 3 (or 4).
 #[derive(Debug)]
 pub struct GicV3<'a> {
@@ -504,7 +637,7 @@ impl GicV3<'_> {
     /// for group 0 and group 1 interrupts separately.
     pub fn init_cpu(&mut self, cpu: usize) {
         // Enable system register access.
-        write_icc_sre_el1(IccSre::SRE);
+        GicCpuInterface::enable_system_register_el1(true);
 
         // Ignore error in case core is already awake.
         let _ = self.redistributor_mark_core_awake(cpu);
@@ -541,12 +674,12 @@ impl GicV3<'_> {
 
     /// Enables or disables group 0 interrupts.
     pub fn enable_group0(enable: bool) {
-        write_icc_igrpen0_el1(if enable { 0x01 } else { 0x00 });
+        GicCpuInterface::enable_group0(enable);
     }
 
     /// Enables or disables group 1 interrupts for the current security state.
     pub fn enable_group1(enable: bool) {
-        write_icc_igrpen1_el1(if enable { 0x01 } else { 0x00 });
+        GicCpuInterface::enable_group1(enable);
     }
 
     /// Enables or disables the interrupt with the given ID.
@@ -587,7 +720,7 @@ impl GicV3<'_> {
     ///
     /// Only interrupts with a higher priority (numerically lower) will be signalled.
     pub fn set_priority_mask(min_priority: u8) {
-        write_icc_pmr_el1(min_priority.into());
+        GicCpuInterface::set_priority_mask(min_priority);
     }
 
     /// Sets the priority of the interrupt with the given ID.
@@ -648,31 +781,20 @@ impl GicV3<'_> {
     pub fn send_sgi(intid: IntId, target: SgiTarget, group: SgiTargetGroup) {
         assert!(intid.is_sgi());
 
-        let sgi_value = match target {
-            SgiTarget::All => {
-                let irm = 0b1;
-                (u64::from(intid.0 & 0x0f) << 24) | (irm << 40)
-            }
+        let sgir = match target {
+            SgiTarget::All => Sgir::all(intid),
             SgiTarget::List {
                 affinity3,
                 affinity2,
                 affinity1,
                 target_list,
-            } => {
-                let irm = 0b0;
-                u64::from(target_list)
-                    | (u64::from(affinity1) << 16)
-                    | (u64::from(intid.0 & 0x0f) << 24)
-                    | (u64::from(affinity2) << 32)
-                    | (irm << 40)
-                    | (u64::from(affinity3) << 48)
-            }
+            } => Sgir::list(intid, affinity3, affinity2, affinity1, target_list),
         };
 
         match group {
-            SgiTargetGroup::Group0 => write_icc_sgi0r_el1(sgi_value),
-            SgiTargetGroup::CurrentGroup1 => write_icc_sgi1r_el1(sgi_value),
-            SgiTargetGroup::OtherGroup1 => write_icc_asgi1r_el1(sgi_value),
+            SgiTargetGroup::Group0 => GicCpuInterface::send_sgi_group0(sgir),
+            SgiTargetGroup::CurrentGroup1 => GicCpuInterface::send_sgi_current_group1(sgir),
+            SgiTargetGroup::OtherGroup1 => GicCpuInterface::send_sgi_other_group1(sgir),
         }
     }
 
@@ -680,12 +802,11 @@ impl GicV3<'_> {
     ///
     /// Returns `None` if there is no pending interrupt of sufficient priority.
     pub fn get_pending_interrupt(group: InterruptGroup) -> Option<IntId> {
-        let icc_hppir = match group {
-            InterruptGroup::Group0 => read_icc_hppir0_el1(),
-            InterruptGroup::Group1 => read_icc_hppir1_el1(),
+        let intid = match group {
+            InterruptGroup::Group0 => GicCpuInterface::get_pending_interrupt_group0(),
+            InterruptGroup::Group1 => GicCpuInterface::get_pending_interrupt_group1(),
         };
 
-        let intid = IntId(icc_hppir);
         if intid == IntId::SPECIAL_NONE {
             None
         } else {
@@ -697,12 +818,11 @@ impl GicV3<'_> {
     ///
     /// Returns `None` if there is no pending interrupt of sufficient priority.
     pub fn get_and_acknowledge_interrupt(group: InterruptGroup) -> Option<IntId> {
-        let icc_iar = match group {
-            InterruptGroup::Group0 => read_icc_iar0_el1(),
-            InterruptGroup::Group1 => read_icc_iar1_el1(),
+        let intid = match group {
+            InterruptGroup::Group0 => GicCpuInterface::get_and_acknowledge_interrupt_group0(),
+            InterruptGroup::Group1 => GicCpuInterface::get_and_acknowledge_interrupt_group1(),
         };
 
-        let intid = IntId(icc_iar);
         if intid == IntId::SPECIAL_NONE {
             None
         } else {
@@ -714,8 +834,8 @@ impl GicV3<'_> {
     /// This drops the interrupt priority and deactivates the interrupt.
     pub fn end_interrupt(intid: IntId, group: InterruptGroup) {
         match group {
-            InterruptGroup::Group0 => write_icc_eoir0_el1(intid.0),
-            InterruptGroup::Group1 => write_icc_eoir1_el1(intid.0),
+            InterruptGroup::Group0 => GicCpuInterface::end_interrupt_group0(intid),
+            InterruptGroup::Group1 => GicCpuInterface::end_interrupt_group1(intid),
         }
     }
 
