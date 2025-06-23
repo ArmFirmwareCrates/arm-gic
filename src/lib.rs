@@ -189,6 +189,11 @@ impl IntId {
         Self::EPPI_START <= self.0 && self.0 < Self::EPPI_END
     }
 
+    /// Returns whether this interrupt ID is for an Extended Shared Peripheral Interrupt.
+    pub const fn is_espi(self) -> bool {
+        Self::ESPI_START <= self.0 && self.0 < Self::ESPI_END
+    }
+
     /// Returns whether this interrupt ID is private to a core, i.e. it is an SGI, PPI or EPPI.
     pub const fn is_private(self) -> bool {
         self.is_sgi() || self.is_ppi() || self.is_eppi()
