@@ -213,6 +213,19 @@ impl IntId {
         index as usize
     }
 
+    pub const fn shared_index(self) -> usize {
+        assert!(self.is_spi());
+
+        let index = if self.is_spi() {
+            self.0
+        } else  {
+            // ESPI
+            self.0 - IntId::ESPI_START
+        };
+
+        index as usize
+    }
+
     /// Returns whether this interrupt ID is for a Shared Peripheral Interrupt.
     pub const fn is_spi(self) -> bool {
         Self::SPI_START <= self.0 && self.0 < Self::SPECIAL_START
