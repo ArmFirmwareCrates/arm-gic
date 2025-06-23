@@ -3,7 +3,8 @@
 
 //! Fake implementations of system register getters and setters for unit tests.
 
-use super::IccSre;
+use crate::sysreg::{IccIgrpen1El3, IccIgrpenEl1, IccSreEl1, IccSreEl23, Sgir};
+
 use std::sync::Mutex;
 
 /// Values of fake system registers.
@@ -12,7 +13,7 @@ pub static SYSREGS: Mutex<SystemRegisters> = Mutex::new(SystemRegisters::new());
 /// A set of fake system registers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SystemRegisters {
-    pub icc_asgi1r_el1: u64,
+    pub icc_asgi1r_el1: Sgir,
     pub icc_iar0_el1: u32,
     pub icc_iar1_el1: u32,
     pub icc_ctlr_el1: u32,
@@ -20,19 +21,22 @@ pub struct SystemRegisters {
     pub icc_eoir1_el1: u32,
     pub icc_hppir0_el1: u32,
     pub icc_hppir1_el1: u32,
-    pub icc_igrpen0_el1: u32,
-    pub icc_igrpen1_el1: u32,
+    pub icc_igrpen0_el1: IccIgrpenEl1,
+    pub icc_igrpen1_el1: IccIgrpenEl1,
+    pub icc_igrpen1_el3: IccIgrpen1El3,
     pub icc_pmr_el1: u32,
-    pub icc_sgi0r_el1: u64,
-    pub icc_sgi1r_el1: u64,
-    pub icc_sre_el1: IccSre,
+    pub icc_sgi0r_el1: Sgir,
+    pub icc_sgi1r_el1: Sgir,
+    pub icc_sre_el1: IccSreEl1,
+    pub icc_sre_el2: IccSreEl23,
+    pub icc_sre_el3: IccSreEl23,
     pub daif: u64,
 }
 
 impl SystemRegisters {
     const fn new() -> Self {
         Self {
-            icc_asgi1r_el1: 0,
+            icc_asgi1r_el1: Sgir::empty(),
             icc_iar0_el1: 0,
             icc_iar1_el1: 0,
             icc_ctlr_el1: 0,
@@ -40,14 +44,21 @@ impl SystemRegisters {
             icc_eoir1_el1: 0,
             icc_hppir0_el1: 0,
             icc_hppir1_el1: 0,
-            icc_igrpen0_el1: 0,
-            icc_igrpen1_el1: 0,
+            icc_igrpen0_el1: IccIgrpenEl1::empty(),
+            icc_igrpen1_el1: IccIgrpenEl1::empty(),
+            icc_igrpen1_el3: IccIgrpen1El3::empty(),
             icc_pmr_el1: 0,
-            icc_sgi0r_el1: 0,
-            icc_sgi1r_el1: 0,
-            icc_sre_el1: IccSre::empty(),
+            icc_sgi0r_el1: Sgir::empty(),
+            icc_sgi1r_el1: Sgir::empty(),
+            icc_sre_el1: IccSreEl1::empty(),
+            icc_sre_el2: IccSreEl23::empty(),
+            icc_sre_el3: IccSreEl23::empty(),
             daif: 0,
         }
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::new();
     }
 }
 
@@ -56,6 +67,11 @@ macro_rules! read_sysreg32 {
     ($sysreg:ident, $opc1:literal, $crm:ident, $crn:ident, $opc2: literal, $function_name:ident) => {
         pub fn $function_name() -> u32 {
             crate::sysreg::fake::SYSREGS.lock().unwrap().$sysreg
+        }
+    };
+    ($sysreg:ident, $opc1:literal, $crm:ident, $crn:ident, $opc2: literal, $function_name:ident, $type:ty) => {
+        pub fn $function_name() -> $type {
+            crate::sysreg::fake::SYSREGS.lock().unwrap().$sysreg.into()
         }
     };
 }
@@ -80,6 +96,11 @@ macro_rules! write_sysreg32 {
 macro_rules! write_sysreg64 {
     ($sysreg:ident, $opc1:literal, $crm:ident, $function_name:ident) => {
         pub fn $function_name(value: u64) {
+            crate::sysreg::fake::SYSREGS.lock().unwrap().$sysreg = value;
+        }
+    };
+    ($sysreg:ident, $opc1:literal, $crm:ident, $function_name:ident, $type:ty) => {
+        pub fn $function_name(value: $type) {
             crate::sysreg::fake::SYSREGS.lock().unwrap().$sysreg = value;
         }
     };

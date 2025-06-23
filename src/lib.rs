@@ -15,6 +15,7 @@
 //!     IntId,
 //!     gicv3::{
 //!         GicV3, SgiTarget, SgiTargetGroup,
+//!         cpu_interface::GicCpuInterface,
 //!         registers::{Gicd, GicrSgi},
 //!     },
 //!     irq_enable,
@@ -30,11 +31,11 @@
 //!
 //! // Configure an SGI and then send it to ourself.
 //! let sgi_intid = IntId::sgi(3);
-//! GicV3::set_priority_mask(0xff);
+//! GicCpuInterface::set_priority_mask(0xff);
 //! gic.set_interrupt_priority(sgi_intid, Some(0), 0x80);
 //! gic.enable_interrupt(sgi_intid, Some(0), true);
 //! irq_enable();
-//! GicV3::send_sgi(
+//! GicCpuInterface::send_sgi(
 //!     sgi_intid,
 //!     SgiTarget::List {
 //!         affinity3: 0,
@@ -191,6 +192,15 @@ impl IntId {
     /// Returns whether this interrupt ID is private to a core, i.e. it is an SGI, PPI or EPPI.
     pub const fn is_private(self) -> bool {
         self.is_sgi() || self.is_ppi() || self.is_eppi()
+    }
+
+    /// Returns SGI index or `None` if it is not an SGI interrupt ID.
+    pub const fn sgi_index(self) -> Option<u32> {
+        if self.is_sgi() {
+            Some(self.0 - Self::SGI_START)
+        } else {
+            None
+        }
     }
 
     /// Maps SGI, PPI and EPPI interrupt IDs into a continuous index range starting from 0,
