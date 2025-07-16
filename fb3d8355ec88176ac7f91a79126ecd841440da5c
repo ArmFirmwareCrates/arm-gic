@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bbe33645_913c367c",
+        "filename": "src/gicv3/registers.rs",
+        "patchSetId": 3
+      },
+      "lineNbr": 448,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-16T16:46:59Z",
+      "side": 0,
+      "message": "Do you know why the GIC documentation splits all these fields up like this?",
+      "revId": "fb3d8355ec88176ac7f91a79126ecd841440da5c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}
