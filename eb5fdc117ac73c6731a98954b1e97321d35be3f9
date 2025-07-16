@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ac8dd6a7_b59abbee",
+        "filename": ".cargo/config.toml",
+        "patchSetId": 2
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-16T16:43:57Z",
+      "side": 0,
+      "message": "Why remove this? It makes development easier to have it, as it makes rust-analyser in your IDE default to the real implementation rather than the fake, which is usually what you want.",
+      "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}

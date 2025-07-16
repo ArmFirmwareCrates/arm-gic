@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a2308741_c9d87959",
+        "filename": ".github/workflows/rust.yml",
+        "patchSetId": 2
+      },
+      "lineNbr": 42,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-16T16:43:57Z",
+      "side": 1,
+      "message": "We can instead set `--features\u003dfakes` here to make the doc tests work.",
+      "revId": "855a136e2242fea4751c5cac9ad7eb22619fd399",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "317b3c1b_0145e38e",
+        "filename": "src/lib.rs",
+        "patchSetId": 2
+      },
+      "lineNbr": 248,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-16T16:43:57Z",
+      "side": 1,
+      "message": "Providing fakes for these functions seems reasonable, but I don\u0027t think it makes sense for them to just silently do nothing when that\u0027s not explicitly requested. I think fakes should only be used if they are explicitly requested via the `fakes` features.",
+      "revId": "855a136e2242fea4751c5cac9ad7eb22619fd399",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c6571f31_1b99601f",
+        "filename": "src/sysreg.rs",
+        "patchSetId": 2
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-16T16:43:57Z",
+      "side": 1,
+      "message": "Matt pointed out this afternoon that checking the `target_os` here might break some things building for e.g. the Trusty kernel that set `target_os`.",
+      "revId": "855a136e2242fea4751c5cac9ad7eb22619fd399",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}
