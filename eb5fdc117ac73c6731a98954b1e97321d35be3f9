@@ -34,6 +34,24 @@
       "parentUuid": "ac8dd6a7_b59abbee",
       "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b9ba2596_9c31ea3e",
+        "filename": ".cargo/config.toml",
+        "patchSetId": 2
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-17T14:51:20Z",
+      "side": 0,
+      "message": "Fair point, that\u0027s annoying. I don\u0027t see a good way to solve the CI issue, so I guess we can go ahead and remove this. It\u0027s just annoying for local development.",
+      "parentUuid": "d28fb60e_b39a34ef",
+      "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
   ]
 }
