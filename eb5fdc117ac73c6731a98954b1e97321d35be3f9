@@ -52,6 +52,24 @@
       "parentUuid": "d28fb60e_b39a34ef",
       "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "de1ca152_7d1e4593",
+        "filename": ".cargo/config.toml",
+        "patchSetId": 2
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-17T15:01:18Z",
+      "side": 0,
+      "message": "I agree that there should better ways of doing this. Our workaround for now is to set `\"rust-analyzer.cargo.target\": \"aarch64-unknown-none-softfloat\"` in the VS code configuration.",
+      "parentUuid": "b9ba2596_9c31ea3e",
+      "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
   ]
 }
