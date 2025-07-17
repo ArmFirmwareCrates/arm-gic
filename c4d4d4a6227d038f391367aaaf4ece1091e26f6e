@@ -16,6 +16,24 @@
       "message": "We should keep this, as Matt pointed out it makes sense to build documentation for the target architecture as other things may also be different between the target and build host architecture.",
       "revId": "c4d4d4a6227d038f391367aaaf4ece1091e26f6e",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9aa80270_7f5771a5",
+        "filename": "Cargo.toml",
+        "patchSetId": 3
+      },
+      "lineNbr": 25,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-17T13:18:55Z",
+      "side": 0,
+      "message": "Acknowledged",
+      "parentUuid": "d83bc3bb_c6a718de",
+      "revId": "c4d4d4a6227d038f391367aaaf4ece1091e26f6e",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
   ]
 }

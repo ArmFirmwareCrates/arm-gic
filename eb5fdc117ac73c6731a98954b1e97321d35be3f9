@@ -16,6 +16,24 @@
       "message": "Why remove this? It makes development easier to have it, as it makes rust-analyser in your IDE default to the real implementation rather than the fake, which is usually what you want.",
       "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d28fb60e_b39a34ef",
+        "filename": ".cargo/config.toml",
+        "patchSetId": 2
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-17T13:18:55Z",
+      "side": 0,
+      "message": "Running `cargo test` now requires explicitly specifying the `--target [host target]` parameter, which ties the command to a specific architecture. This makes it difficult to write test or CI scripts that are architecture-independent.\nIn contrast, for `cargo build` we always know that the target is `aarch64-*` or `arm-*` regardless of the host architecture, so hardcoding the target is acceptable.\nIdeally, we could select whether this configuration value applies to `cargo test`, but currently, there doesn\u0027t seem to be a way to do that.",
+      "parentUuid": "ac8dd6a7_b59abbee",
+      "revId": "eb5fdc117ac73c6731a98954b1e97321d35be3f9",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
   ]
 }
