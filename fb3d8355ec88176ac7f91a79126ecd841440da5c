@@ -34,6 +34,24 @@
       "parentUuid": "bbe33645_913c367c",
       "revId": "fb3d8355ec88176ac7f91a79126ecd841440da5c",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "7611261c_467597bd",
+        "filename": "src/gicv3/registers.rs",
+        "patchSetId": 3
+      },
+      "lineNbr": 448,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-17T16:06:44Z",
+      "side": 0,
+      "message": "Acknowledged",
+      "parentUuid": "81e4f1af_84dfa4f0",
+      "revId": "fb3d8355ec88176ac7f91a79126ecd841440da5c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
   ]
 }
