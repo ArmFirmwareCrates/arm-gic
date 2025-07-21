@@ -9,7 +9,7 @@ use crate::{
         set_bit,
     },
 };
-use core::hint::spin_loop;
+use core::{hint::spin_loop, ptr::NonNull};
 use safe_mmio::{UniqueMmioPointer, field, field_shared};
 
 /// Read register and store it in a context structure.
@@ -78,6 +78,61 @@ macro_rules! restore_regs {
             field!($regs, $reg).get(i).unwrap().write($context.$reg[i]);
         }
     };
+}
+
+pub struct GicRedistributorProber {
+    base: *mut GicrSgi,
+    gic_v4: bool,
+}
+
+impl GicRedistributorProber {
+    /// Create new prober instance.
+    /// # Safety
+    /// The caller must ensure that `base` points to a continiously mapped GIC redistributor memory
+    /// area that spans until the last redistributor block where GICR_TYPER.Last is set.
+    pub unsafe fn new(base: *mut GicrSgi, gic_v4: bool) -> Self {
+        Self { base, gic_v4 }
+    }
+
+    /// Returns the address of the redistributor block of the given MPIDR or None if not found.
+    pub fn probe(&self, mpidr: u64) -> Option<*mut GicrSgi> {
+        let mut redist_addr = self.base;
+
+        loop {
+            // Safety: Self::new promises that self.base points to a valid GIC redistributor block
+            // and redist_pointer stops at the last redistributor.
+            let redist_pointer =
+                unsafe { UniqueMmioPointer::new(NonNull::new(redist_addr).unwrap()) };
+
+            let gicr = field_shared!(redist_pointer, gicr);
+            let typer = field_shared!(gicr, typer).read();
+
+            if mpidr & 0x0000_00ff_00ff_ffff == typer.core_mpidr() {
+                return Some(redist_addr);
+            }
+
+            if typer.last_redistributor() {
+                return None;
+            }
+
+            // Step to next redistributor block
+            let redistributor_size = if self.gic_v4 && typer.virtual_lpis_supported() {
+                // In this case GicV4 adds 2 frames:
+                // vlpi: 64KiB
+                // reserved: 64KiB
+                2
+            } else {
+                1
+            } * size_of::<GicrSgi>();
+
+            // Safety: Self::new promises that self.base points to a valid GIC redistributor block
+            // and GICR_TYPER.Last was not set for this redistributor. It is safe to move the
+            // pointer to the next one.
+            unsafe {
+                redist_addr = redist_addr.byte_add(redistributor_size);
+            }
+        }
+    }
 }
 
 /// Context of the GIC redistributor. It contains a set of registers that has to be saved/restored
