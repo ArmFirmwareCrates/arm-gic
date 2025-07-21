@@ -9,7 +9,7 @@ use crate::{
         set_bit,
     },
 };
-use core::hint::spin_loop;
+use core::{hint::spin_loop, marker::PhantomData, ptr::NonNull};
 use safe_mmio::{UniqueMmioPointer, field, field_shared};
 
 /// Read register and store it in a context structure.
@@ -78,6 +78,66 @@ macro_rules! restore_regs {
             field!($regs, $reg).get(i).unwrap().write($context.$reg[i]);
         }
     };
+}
+
+/// Iterator over the redistributor register blocks.
+pub struct GicRedistributorIterator<'a> {
+    pointer: Option<NonNull<GicrSgi>>,
+    gic_v4: bool,
+    phantom: PhantomData<&'a GicrSgi>,
+}
+
+impl GicRedistributorIterator<'_> {
+    /// Create new iterator instance.
+    ///
+    /// # Safety
+    /// The caller must ensure that `base` points to a continiously mapped GIC redistributor memory
+    /// area that spans until the last redistributor block (N) where GICR_TYPER.Last is set and
+    /// there must be no other references to this area.
+    pub unsafe fn new(base: NonNull<GicrSgi>, gic_v4: bool) -> Self {
+        Self {
+            pointer: Some(base),
+            gic_v4,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a> Iterator for GicRedistributorIterator<'a> {
+    type Item = GicRedistributor<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let pointer = self.pointer?;
+
+        // Safety: GicRedistributorIterator::new promises that base points to a valid GIC
+        // redistributor block and pointer stops at the last redistributor.
+        let redist = unsafe { UniqueMmioPointer::new(pointer) };
+
+        let gicr = field_shared!(redist, gicr);
+        let typer = field_shared!(gicr, typer).read();
+
+        self.pointer = if !typer.last_redistributor() {
+            // Step to next redistributor block
+            let redistributor_size = if self.gic_v4 && typer.virtual_lpis_supported() {
+                // In this case GicV4 adds 2 frames:
+                // vlpi: 64KiB
+                // reserved: 64KiB
+                2
+            } else {
+                1
+            };
+
+            // Safety: GicRedistributorIterator::new promises that base points to a valid GIC
+            // redistributor block and GICR_TYPER.Last was not set for this redistributor. It is
+            // safe to step the pointer to the next redistributor block.
+            unsafe { Some(pointer.add(redistributor_size)) }
+        } else {
+            // Clear pointer at the last redistributor block.
+            None
+        };
+
+        Some(GicRedistributor::new(redist))
+    }
 }
 
 /// Context of the GIC redistributor. It contains a set of registers that has to be saved/restored

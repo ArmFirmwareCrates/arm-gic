@@ -11,6 +11,7 @@
 ### Improvements
 
 - Split the implementation into separate Distributor, Redistributor and CPU interface components.
+- Implement `GicRedistributorIterator` for iterating over the GIC redistributor blocks.
 
 ## 0.6.1
 
