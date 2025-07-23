@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3a2a8cbe_79a98c00",
+        "filename": "src/gicv3/registers.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 521,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 0,
+      "message": "The idea of the underscores here was to break the value up into the affinity levels, I think that is more useful than just arbitrary 16 bit chunks.",
+      "revId": "5c268b0e79185e54273ae510e513459092b28fe5",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}

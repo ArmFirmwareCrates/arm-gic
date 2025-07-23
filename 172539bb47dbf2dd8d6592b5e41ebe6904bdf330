@@ -1,0 +1,101 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4b264542_8b07267b",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 134,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 1,
+      "message": "Please add Rustdoc comments for this and the other new public methods.",
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a9fd31c6_4445083a",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 142,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 1,
+      "message": "I think it would be clearer to use `Sgi::ICENABLER_BITS` here. Otherwise it\u0027s not obvious where the constant is coming from without tracing through the macro.",
+      "range": {
+        "startLine": 142,
+        "startChar": 45,
+        "endLine": 142,
+        "endChar": 59
+      },
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "52bbf362_08509f95",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 254,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 1,
+      "message": "What is `proc_num`?",
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "52511baa_f93c2198",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 338,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 1,
+      "message": "Let\u0027s not add this until it actually does something.",
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "10084dc8_89e6b294",
+        "filename": "src/lib.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 197,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 1,
+      "message": "Typo: continuous",
+      "range": {
+        "startLine": 197,
+        "startChar": 52,
+        "endLine": 197,
+        "endChar": 62
+      },
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}

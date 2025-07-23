@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "36ca4c52_bb342b1d",
+        "filename": "src/gicv3.rs",
+        "patchSetId": 6
+      },
+      "lineNbr": 427,
+      "author": {
+        "id": 1000309
+      },
+      "writtenOn": "2025-07-23T16:07:02Z",
+      "side": 0,
+      "message": "How about adding a function to get a `GicRedistributor` instance instead? It could also be used by all the other functions which call out to the redistributor.",
+      "revId": "d2fb69dac2cdcff280f864f7b29e9a1a9887fc24",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}
