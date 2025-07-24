@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fa1b1c2d_945fbc44",
+        "filename": "CONTRIBUTING.md",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1000096
+      },
+      "writtenOn": "2025-07-24T10:51:17Z",
+      "side": 0,
+      "message": "Just a minor thing: Having a separate contributing.md provides better integration in the GitHub UI (i.e. the mirror). But if you prefer better alignment with other crates, that\u0027s fine too.",
+      "revId": "811a333c42a7a6bf48676838518d6eea7bc45e58",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    }
+  ]
+}
