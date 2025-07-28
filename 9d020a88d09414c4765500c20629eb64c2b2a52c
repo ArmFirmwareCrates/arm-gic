@@ -24,6 +24,30 @@
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "4f1f4a8a_af787db3",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 6
+      },
+      "lineNbr": 80,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "43ecb44f_8e24c181",
+      "range": {
+        "startLine": 80,
+        "startChar": 84,
+        "endLine": 80,
+        "endChar": 88
+      },
+      "revId": "9d020a88d09414c4765500c20629eb64c2b2a52c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "005bd378_896ce827",
@@ -47,6 +71,30 @@
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "c49c0f58_40d17399",
+        "filename": "src/lib.rs",
+        "patchSetId": 6
+      },
+      "lineNbr": 193,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "005bd378_896ce827",
+      "range": {
+        "startLine": 193,
+        "startChar": 78,
+        "endLine": 193,
+        "endChar": 97
+      },
+      "revId": "9d020a88d09414c4765500c20629eb64c2b2a52c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c94627e4_3aabbffc",
@@ -60,6 +108,24 @@
       "writtenOn": "2025-07-23T16:07:02Z",
       "side": 1,
       "message": "Return an `Option\u003cusize\u003e` rather than panicking here, then the caller can choose whether to unwrap and panic if they want to.",
+      "revId": "9d020a88d09414c4765500c20629eb64c2b2a52c",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "51f4e71c_569f507b",
+        "filename": "src/lib.rs",
+        "patchSetId": 6
+      },
+      "lineNbr": 199,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "c94627e4_3aabbffc",
       "revId": "9d020a88d09414c4765500c20629eb64c2b2a52c",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }

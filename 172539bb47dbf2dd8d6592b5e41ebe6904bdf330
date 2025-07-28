@@ -18,6 +18,24 @@
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "661e577f_f38bcce7",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 134,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "4b264542_8b07267b",
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "a9fd31c6_4445083a",
@@ -31,6 +49,30 @@
       "writtenOn": "2025-07-23T16:07:02Z",
       "side": 1,
       "message": "I think it would be clearer to use `Sgi::ICENABLER_BITS` here. Otherwise it\u0027s not obvious where the constant is coming from without tracing through the macro.",
+      "range": {
+        "startLine": 142,
+        "startChar": 45,
+        "endLine": 142,
+        "endChar": 59
+      },
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "fb74cbc8_9b52cbfd",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 142,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "a9fd31c6_4445083a",
       "range": {
         "startLine": 142,
         "startChar": 45,
@@ -60,6 +102,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "6f47cf63_bb952212",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 254,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "It is the return value of plat_my_core_pos, The GIC driver has an internal mapping between redistributor indices and proc_num for cases when the two are not matching. It probes the redistributors by MPIDR to build this mapping.",
+      "parentUuid": "52bbf362_08509f95",
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "52511baa_f93c2198",
         "filename": "src/gicv3/redistributor.rs",
         "patchSetId": 8
@@ -71,6 +131,24 @@
       "writtenOn": "2025-07-23T16:07:02Z",
       "side": 1,
       "message": "Let\u0027s not add this until it actually does something.",
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2fc363f4_f5d46189",
+        "filename": "src/gicv3/redistributor.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 338,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "52511baa_f93c2198",
       "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     },
@@ -88,6 +166,30 @@
       "writtenOn": "2025-07-23T16:07:02Z",
       "side": 1,
       "message": "Typo: continuous",
+      "range": {
+        "startLine": 197,
+        "startChar": 52,
+        "endLine": 197,
+        "endChar": 62
+      },
+      "revId": "172539bb47dbf2dd8d6592b5e41ebe6904bdf330",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9768514b_fa6cf4a2",
+        "filename": "src/lib.rs",
+        "patchSetId": 8
+      },
+      "lineNbr": 197,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-07-28T11:05:42Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "10084dc8_89e6b294",
       "range": {
         "startLine": 197,
         "startChar": 52,
