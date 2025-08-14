@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+### Organisational
+
+- Migrate the project under trustedfirmware.org governance
+- Switch to SPDX license identifiers
+
 ## 0.6.0
 
 ### Breaking changes
