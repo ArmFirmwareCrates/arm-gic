@@ -415,12 +415,12 @@ impl GicV3<'_> {
     ///
     /// This may be used to read and write the registers directly for functionality not yet
     /// supported by this driver.
-    pub fn gicd_ptr(&mut self) -> UniqueMmioPointer<Gicd> {
+    pub fn gicd_ptr(&mut self) -> UniqueMmioPointer<'_, Gicd> {
         self.gicd.reborrow()
     }
 
     /// Returns a pointer to the GIC redistributor, SGI and PPI registers.
-    fn gicr_sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<GicrSgi> {
+    fn gicr_sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<'_, GicrSgi> {
         assert!(cpu < self.cpu_count);
         // SAFETY: The caller of `GicV3::new` promised that `gicr_base` and `gicr_stride` were valid
         // and there are no aliases.
@@ -435,7 +435,7 @@ impl GicV3<'_> {
     ///
     /// This may be used to read and write the registers directly for functionality not yet
     /// supported by this driver.
-    pub fn gicr_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<Gicr> {
+    pub fn gicr_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<'_, Gicr> {
         // SAFETY: We only split out a single field.
         unsafe { split_fields!(self.gicr_sgi_ptr(cpu), gicr) }
     }
@@ -444,7 +444,7 @@ impl GicV3<'_> {
     ///
     /// This may be used to read and write the registers directly for functionality not yet
     /// supported by this driver.
-    pub fn sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<Sgi> {
+    pub fn sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<'_, Sgi> {
         // SAFETY: We only split out a single field.
         unsafe { split_fields!(self.gicr_sgi_ptr(cpu), sgi) }
     }
