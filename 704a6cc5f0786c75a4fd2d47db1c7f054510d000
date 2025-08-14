@@ -16,6 +16,24 @@
       "message": "Nit: let\u0027s keep the same format as we\u0027ve followed so far, with a subheading for what type of changes these are. I guess `### Organisational` or something like that.",
       "revId": "704a6cc5f0786c75a4fd2d47db1c7f054510d000",
       "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8da9b82b_0ec532d8",
+        "filename": "CHANGELOG.md",
+        "patchSetId": 4
+      },
+      "lineNbr": 4,
+      "author": {
+        "id": 1000159
+      },
+      "writtenOn": "2025-08-14T15:35:16Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "e9e4c232_e5446c3d",
+      "revId": "704a6cc5f0786c75a4fd2d47db1c7f054510d000",
+      "serverId": "8f6f209b-db1a-4cbf-aa44-c8bc30e9bfda"
     }
   ]
 }
