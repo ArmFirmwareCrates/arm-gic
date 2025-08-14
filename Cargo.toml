@@ -8,7 +8,7 @@ authors = [
   "Andrew Walbran <qwandor@google.com>",
   "Fritz Stracke <fritz.stracke@rwth-aachen.de>",
 ]
-repository = "https://github.com/google/arm-gic"
+repository = "https://github.com/ArmFirmwareCrates/arm-gic"
 keywords = ["arm", "aarch64", "driver", "gic", "interrupt-controller"]
 categories = ["embedded", "no-std", "hardware-support"]
 
