@@ -9,9 +9,9 @@ use self::registers::{Gicd, GicdCtlr, Gicr, GicrCtlr, Sgi, Waker};
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 use crate::sysreg::{
     read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
-    write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
-    write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1,
-    write_icc_sgi1r_el1, write_icc_sre_el1,
+    read_icc_pmr_el1, write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1,
+    write_icc_eoir1_el1, write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_pmr_el1,
+    write_icc_sgi0r_el1, write_icc_sgi1r_el1, write_icc_sre_el1,
 };
 use crate::{IntId, Trigger};
 use core::{hint::spin_loop, ptr::NonNull};
@@ -245,6 +245,12 @@ impl GicV3<'_> {
     #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
     pub fn set_priority_mask(min_priority: u8) {
         write_icc_pmr_el1(min_priority.into());
+    }
+
+    /// Gets the priority mask for the current CPU core.
+    #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
+    pub fn get_priority_mask() -> u8 {
+        read_icc_pmr_el1() as u8
     }
 
     /// Sets the priority of the interrupt with the given ID.
