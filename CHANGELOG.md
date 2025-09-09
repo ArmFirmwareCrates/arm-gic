@@ -17,6 +17,8 @@
   - `GicV3::get_pending_interrupt` -> `GicCpuInterface::get_pending_interrupt`
   - `GicV3::send_sgi` -> `GicCpuInterface::send_sgi`
   - `GicV3::set_priority_mask` -> `GicCpuInterface::set_priority_mask`
+- Change the return value of `GicV2::enable_interrupt` from `Result<(), ()>` to `Result<(), Error>`
+  to resolve `clippy::result_unit_err` warning.
 
 ### Improvements
 
