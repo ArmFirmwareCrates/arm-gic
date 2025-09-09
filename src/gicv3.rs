@@ -30,7 +30,8 @@ pub enum GICRError {
     AlreadyAsleep,
 }
 
-const HIGHEST_NS_PRIORITY: u8 = 0x80;
+pub const HIGHEST_S_PRIORITY: u8 = 0x00;
+pub const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
 /// Modifies `nth` bit of memory pointed by `registers`.
 fn modify_bit(mut registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize, set_bit: bool) {
