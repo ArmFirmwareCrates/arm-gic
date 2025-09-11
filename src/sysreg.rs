@@ -21,7 +21,7 @@ read_sysreg32!(icc_hppir0_el1, 0, c12, c8, 2, read_icc_hppir0_el1);
 read_sysreg32!(icc_hppir1_el1, 0, c12, c12, 2, read_icc_hppir1_el1);
 read_sysreg32!(icc_iar0_el1, 0, c12, c8, 0, read_icc_iar0_el1);
 read_sysreg32!(icc_iar1_el1, 0, c12, c12, 0, read_icc_iar1_el1);
-
+read_sysreg32!(icc_pmr_el1, 0, c4, c6, 0, read_icc_pmr_el1);
 write_sysreg32!(icc_ctlr_el1, 0, c12, c12, 4, write_icc_ctlr_el1);
 write_sysreg32!(icc_eoir0_el1, 0, c12, c8, 1, write_icc_eoir0_el1);
 write_sysreg32!(icc_eoir1_el1, 0, c12, c12, 1, write_icc_eoir1_el1);
