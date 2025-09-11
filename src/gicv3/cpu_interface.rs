@@ -8,10 +8,10 @@ use crate::{
     sysreg::{
         IccIgrpen1El3, IccIgrpenEl1, IccSreEl1, IccSreEl23, Sgir, read_icc_hppir0_el1,
         read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1, read_icc_igrpen1_el3,
-        read_icc_sre_el1, read_icc_sre_el2, read_icc_sre_el3, write_icc_asgi1r_el1,
-        write_icc_eoir0_el1, write_icc_eoir1_el1, write_icc_igrpen0_el1, write_icc_igrpen1_el1,
-        write_icc_igrpen1_el3, write_icc_pmr_el1, write_icc_sgi0r_el1, write_icc_sgi1r_el1,
-        write_icc_sre_el1, write_icc_sre_el2, write_icc_sre_el3,
+        read_icc_pmr_el1, read_icc_sre_el1, read_icc_sre_el2, read_icc_sre_el3,
+        write_icc_asgi1r_el1, write_icc_eoir0_el1, write_icc_eoir1_el1, write_icc_igrpen0_el1,
+        write_icc_igrpen1_el1, write_icc_igrpen1_el3, write_icc_pmr_el1, write_icc_sgi0r_el1,
+        write_icc_sgi1r_el1, write_icc_sre_el1, write_icc_sre_el2, write_icc_sre_el3,
     },
 };
 
@@ -117,6 +117,11 @@ impl GicCpuInterface {
     /// Only interrupts with a higher priority (numerically lower) will be signalled.
     pub fn set_priority_mask(min_priority: u8) {
         write_icc_pmr_el1(min_priority.into());
+    }
+
+    /// Gets the priority mask for the current CPU core.
+    pub fn get_priority_mask() -> u8 {
+        read_icc_pmr_el1() as u8
     }
 
     /// Enables or disables system register interface for the current Security state.
@@ -314,7 +319,7 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::set_priority_mask(0xab);
-        assert_eq!(0xab, read_reg!(icc_pmr_el1));
+        assert_eq!(0xab, GicCpuInterface::get_priority_mask());
     }
 
     #[test]

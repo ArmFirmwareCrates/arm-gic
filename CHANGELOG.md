@@ -21,6 +21,8 @@
 
 - Split the implementation into separate Distributor, Redistributor and CPU interface components.
 - Implement `GicRedistributorIterator` for iterating over the GIC redistributor blocks.
+- Add `GicCpuInterface::get_priority_mask`
+- Add `GicV2::get_priority_mask`
 
 ## 0.6.1
 
