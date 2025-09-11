@@ -101,6 +101,11 @@ impl GicV2<'_> {
         field!(self.gicc, pmr).write(min_priority as u32);
     }
 
+    /// Gets the priority mask for the current CPU core.
+    pub fn get_priority_mask(&mut self) -> u8 {
+        field!(self.gicc, pmr).read() as u8
+    }
+
     /// Sets the priority of the interrupt with the given ID.
     ///
     /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and

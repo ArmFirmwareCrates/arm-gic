@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.0
+
+### Breaking changes
+
+- Use safe-mmio fields in Sgi and merge PPI registers.
+- Change `GicV3` getters to return component driver instances instead of raw register blocks.
+  - `GicV3::gicr_ptr()`, `GicV3::sgi_ptr()` -> `GicV3::redistributor()`
+- Change CPU interface system register types.
+- Move CPU interface functions from `GicV3` into `GicCpuInterface`
+  - `GicV3::enable_group0` -> `GicCpuInterface::enable_group0`
+  - `GicV3::enable_group1` -> `GicCpuInterface::enable_group1`
+  - `GicV3::end_interrupt` -> `GicCpuInterface::end_interrupt`
+  - `GicV3::get_and_acknowledge_interrupt` -> `GicCpuInterface::get_and_acknowledge_interrupt`
+  - `GicV3::get_pending_interrupt` -> `GicCpuInterface::get_pending_interrupt`
+  - `GicV3::send_sgi` -> `GicCpuInterface::send_sgi`
+  - `GicV3::set_priority_mask` -> `GicCpuInterface::set_priority_mask`
+
+### Improvements
+
+- Split the implementation into separate Distributor, Redistributor and CPU interface components.
+- Implement `GicRedistributorIterator` for iterating over the GIC redistributor blocks.
+- Add `GicCpuInterface::get_priority_mask`
+- Add `GicV2::get_priority_mask`
+
 ## 0.6.1
 
 ### Organisational
