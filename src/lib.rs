@@ -14,8 +14,7 @@
 //! use arm_gic::{
 //!     IntId,
 //!     gicv3::{
-//!         GicV3, SgiTarget, SgiTargetGroup,
-//!         cpu_interface::GicCpuInterface,
+//!         GicCpuInterface, GicV3, SgiTarget, SgiTargetGroup,
 //!         registers::{Gicd, GicrSgi},
 //!     },
 //!     irq_enable,

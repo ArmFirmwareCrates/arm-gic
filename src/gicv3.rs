@@ -4,9 +4,9 @@
 //! Driver for the Arm Generic Interrupt Controller version 3 (or 4).
 
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
-pub mod cpu_interface;
-pub mod distributor;
-pub mod redistributor;
+mod cpu_interface;
+mod distributor;
+mod redistributor;
 pub mod registers;
 
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
@@ -14,9 +14,9 @@ use crate::sysreg::write_icc_ctlr_el1;
 use crate::{IntId, Trigger};
 use core::ptr::NonNull;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
-use cpu_interface::GicCpuInterface;
-use distributor::GicDistributor;
-use redistributor::GicRedistributor;
+pub use cpu_interface::GicCpuInterface;
+pub use distributor::{GicDistributor, GicDistributorContext};
+pub use redistributor::{GicRedistributor, GicRedistributorContext, GicRedistributorIterator};
 use registers::{Gicd, GicdCtlr, GicrSgi, GicrTyper, Typer};
 use safe_mmio::{UniqueMmioPointer, field_shared, fields::ReadPureWrite};
 use thiserror::Error;
@@ -31,7 +31,10 @@ pub enum GICRError {
     AlreadyAsleep,
 }
 
+/// Highest priority value of Group 0 and Secure Group 1 interrupts.
 pub const HIGHEST_S_PRIORITY: u8 = 0x00;
+
+/// Highest priority value of Non-secure Group 1 interrupts.
 pub const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
 /// Modifies `nth` bit of memory pointed by `registers`.

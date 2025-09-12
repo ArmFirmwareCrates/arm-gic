@@ -169,7 +169,7 @@ macro_rules! define_context_registers {
 /// count.
 ///
 /// ```
-/// use arm_gic::gicv3::redistributor::GicRedistributorContext;
+/// use arm_gic::gicv3::GicRedistributorContext;
 ///
 /// let context = GicRedistributorContext::<{ GicRedistributorContext::ireg_count(96) }>::default();
 /// ```

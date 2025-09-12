@@ -15,6 +15,7 @@ use crate::{
     },
 };
 
+/// GIC CPU interface driver implementation.
 pub struct GicCpuInterface;
 
 impl GicCpuInterface {

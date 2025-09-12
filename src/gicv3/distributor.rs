@@ -165,7 +165,7 @@ macro_rules! define_context_extended_registers {
 /// the const parameters based on the SPI and ESPI counts.
 ///
 /// ```
-/// use arm_gic::gicv3::distributor::GicDistributorContext;
+/// use arm_gic::gicv3::GicDistributorContext;
 ///
 /// let context_no_extended =
 ///     GicDistributorContext::<{ GicDistributorContext::ireg_count(988) }, 0>::default();
