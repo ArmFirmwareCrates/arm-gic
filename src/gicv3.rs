@@ -20,6 +20,7 @@ use redistributor::GicRedistributor;
 use registers::{Gicd, GicdCtlr, GicrSgi, GicrTyper, Typer};
 use safe_mmio::{UniqueMmioPointer, field_shared, fields::ReadPureWrite};
 use thiserror::Error;
+use zerocopy::{Immutable, IntoBytes};
 
 /// An error which may be returned from operations on a GIC Redistributor.
 #[derive(Error, Debug, Clone, Copy, Eq, PartialEq)]
@@ -60,6 +61,32 @@ fn set_bit(registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize) {
 /// Clears `nth` bit of memory pointed by `registers`.
 fn clear_bit(registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize) {
     modify_bit(registers, nth, false);
+}
+
+/// Calculates the register count based on the interrupt count, bits used in the register per
+/// interrupt and the field's type.
+const fn register_count<T: ?Sized>(int_count: usize, bits_per_int: usize, field: &T) -> usize {
+    (int_count * bits_per_int).div_ceil(size_of_val(field) * 8)
+}
+
+/// Sets per-interrupt register values for a given interrupt count.
+///
+/// The function iterates over a range of `regs` and writes `value` into each register. The range is
+/// determined based on `start_offset`, `int_count`, `bits_per_int` and the type of the registers.
+fn set_regs<T>(
+    mut regs: UniqueMmioPointer<[ReadPureWrite<T>]>,
+    start_offset: usize,
+    int_count: usize,
+    bits_per_int: usize,
+    value: T,
+) where
+    T: Immutable + IntoBytes + Copy,
+{
+    let reg_start = register_count(start_offset, bits_per_int, &value);
+    let reg_end = register_count(start_offset + int_count, bits_per_int, &value);
+    for i in reg_start..reg_end {
+        regs.get(i).unwrap().write(value);
+    }
 }
 
 /// Driver for an Arm Generic Interrupt Controller version 3 (or 4).

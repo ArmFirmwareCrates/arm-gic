@@ -1,19 +1,17 @@
 // Copyright The arm-gic Authors.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use core::hint::spin_loop;
-
-use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};
-use zerocopy::{Immutable, IntoBytes};
-
 use crate::{
     IntId, Trigger,
     gicv3::{
-        Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit,
+        Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit, register_count,
         registers::{Gicd, GicdCtlr, Typer},
-        set_bit,
+        set_bit, set_regs,
     },
 };
+use core::{hint::spin_loop, ops::Range};
+use safe_mmio::{UniqueMmioPointer, field, field_shared};
+use zerocopy::{transmute_mut, transmute_ref};
 
 /// Selects regular or extended registers based on in the `IntId`.
 /// Returns `$regs.$reg` or `$regs.$reg_e` if `$intid` indicates an extended interrupt ID.
@@ -31,39 +29,13 @@ macro_rules! select_regs {
     };
 }
 
-/// Calculates the register count based on the interrupt count, bits used in the register per
-/// interrupt and the field's type.
-const fn register_count<T: ?Sized>(int_count: usize, bits_per_int: usize, field: &T) -> usize {
-    (int_count * bits_per_int).div_ceil(size_of_val(field) * 8)
-}
-
-/// Sets (E)SPI register values for a given interrupt count.
-///
-/// The function iterates over a range of `regs` and writes `value` into each register. The range is
-/// determined based on `start_offset`, `int_count`, `bits_per_int` and the type of the registers.
-fn set_regs<T>(
-    mut regs: UniqueMmioPointer<[ReadPureWrite<T>]>,
-    start_offset: usize,
-    int_count: usize,
-    bits_per_int: usize,
-    value: T,
-) where
-    T: Immutable + IntoBytes + Copy,
-{
-    let reg_start = register_count(start_offset, bits_per_int, &value);
-    let reg_end = register_count(start_offset + int_count, bits_per_int, &value);
-    for i in reg_start..reg_end {
-        regs.get(i).unwrap().write(value);
-    }
-}
-
 /// Reads the (E)SPI registers and store them in a context structure.
 ///
 /// The macro iterates over a range of `$regs.$reg` and saves each register into `$context`. The
 /// range is determined based on `$start_offset`, `$int_count`, `$bits_per_int` and the type of the
 /// registers.
 macro_rules! save_regs {
-    ($context:ident, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
+    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
         save_regs!(
             $context,
             $regs,
@@ -73,11 +45,12 @@ macro_rules! save_regs {
             IntId::SPI_START as usize
         )
     };
-    ($context:ident, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr, $start_offset:expr) => {
-        let reg_start = register_count($start_offset, $bits_per_int, &$context.$reg[0]);
-        let reg_end = register_count($start_offset + $int_count, $bits_per_int, &$context.$reg[0]);
+    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr, $start_offset:expr) => {
+        let context_typed = if false { $context[0] } else { 0 };
+        let reg_start = register_count($start_offset, $bits_per_int, &context_typed);
+        let reg_end = register_count($start_offset + $int_count, $bits_per_int, &context_typed);
         for i in reg_start..reg_end {
-            $context.$reg[i - reg_start] = field_shared!($regs, $reg).get(i).unwrap().read();
+            $context[i - reg_start] = field_shared!($regs, $reg).get(i).unwrap().read();
         }
     };
 }
@@ -88,7 +61,7 @@ macro_rules! save_regs {
 /// range is determined based on `$start_offset`, `$int_count`, `$bits_per_int` and the type of the
 /// registers.
 macro_rules! restore_regs {
-    ($context:ident, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
+    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
         restore_regs!(
             $context,
             $regs,
@@ -98,87 +71,202 @@ macro_rules! restore_regs {
             IntId::SPI_START as usize
         );
     };
-    ($context:ident, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr, $start_offset:expr) => {
-        let reg_start = register_count($start_offset, $bits_per_int, &$context.$reg[0]);
-        let reg_end = register_count($start_offset + $int_count, $bits_per_int, &$context.$reg[0]);
+    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr, $start_offset:expr) => {
+        let context_typed = if false { $context[0] } else { 0 };
+        let reg_start = register_count($start_offset, $bits_per_int, &context_typed);
+        let reg_end = register_count($start_offset + $int_count, $bits_per_int, &context_typed);
         for i in reg_start..reg_end {
             field!($regs, $reg)
                 .get(i)
                 .unwrap()
-                .write($context.$reg[i - reg_start]);
+                .write($context[i - reg_start]);
         }
     };
 }
 
-/// Context of the GIC distributor. It contains a set of registers that has to be save/restored on
-/// distributor power off/on.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GicDistributorContext {
-    irouter: [u64; Self::SPI_COUNT],
-    ctlr: GicdCtlr,
-    igroupr: [u32; Self::reg_count(Gicd::IGROUPR_BITS)],
-    isenabler: [u32; Self::reg_count(Gicd::ISENABLER_BITS)],
-    ispendr: [u32; Self::reg_count(Gicd::ISPENDR_BITS)],
-    isactiver: [u32; Self::reg_count(Gicd::ISACTIVER_BITS)],
-    icfgr: [u32; Self::reg_count(Gicd::ICFGR_BITS)],
-    igrpmodr: [u32; Self::reg_count(Gicd::IGRPMODR_BITS)],
-    nsacr: [u32; Self::reg_count(Gicd::NSACR_BITS)],
-    ipriorityr: [u8; Self::SPI_COUNT],
+/// Defines functions for accessing different parts of the `iregs` member.
+///
+/// Consumes an array of `(register name/immutable accessor name, mutable accessor name, type, bits
+/// per interrupt)` tuples and generate a pair of immutable and mutable accessor functions.
+macro_rules! define_context_registers {
+    // Public variant.
+    ($( ( $reg:ident, $reg_mut:ident, $type:ty, $bits:expr ) ),* $(,,)?) => {
+        define_context_registers!(@step 0 ; $( ( $reg, $reg_mut, $type, $bits ) ),* );
+    };
 
-    irouter_e: [u64; Self::ESPI_COUNT],
-    igroupr_e: [u32; Self::ereg_count(Gicd::IGROUPR_BITS)],
-    isenabler_e: [u32; Self::ereg_count(Gicd::ISENABLER_BITS)],
-    ispendr_e: [u32; Self::ereg_count(Gicd::ISPENDR_BITS)],
-    isactiver_e: [u32; Self::ereg_count(Gicd::ISACTIVER_BITS)],
-    icfgr_e: [u32; Self::ereg_count(Gicd::ICFGR_BITS)],
-    igrpmodr_e: [u32; Self::ereg_count(Gicd::IGRPMODR_BITS)],
-    nsacr_e: [u32; Self::ereg_count(Gicd::NSACR_BITS)],
-    ipriorityr_e: [u8; Self::ESPI_COUNT],
+    // The stop condition output the sum of bits per interrupt constant.
+    ( @step $n:expr ; ) => {
+        const BITS_PER_SPI: usize = $n;
+    };
+
+    // Recursive step: generate a pair of functions, then munch the rest.
+    ( @step $n:expr ;
+      ( $reg:ident, $reg_mut:ident, $type:ty, $bits:expr ) $(, $rest:tt)*
+    ) => {
+        #[doc = "Autogenerated function to access "]
+        #[doc = stringify!($reg)]
+        #[doc = " registers."]
+        pub fn $reg(&self) -> &[$type] {
+            transmute_ref!(&self.iregs[Self::spi_reg_index($n..($n + $bits))])
+        }
+
+        #[doc = "Autogenerated function to mutable access "]
+        #[doc = stringify!($reg)]
+        #[doc = " registers."]
+        pub fn $reg_mut(&mut self) -> &mut [$type] {
+            transmute_mut!(&mut self.iregs[Self::spi_reg_index($n..($n + $bits))])
+        }
+
+        define_context_registers!(@step $n + $bits ; $( $rest ),*);
+    };
 }
 
-impl GicDistributorContext {
-    // TODO: create extended INTID feature and set variable accordingly
-    const SPI_COUNT: usize = 988;
-    const ESPI_COUNT: usize = 1024;
+/// Defines functions for accessing different parts of the `iregs` member.
+///
+/// Consumes an array of `(register name/immutable accessor name, mutable accessor name, type, bits
+/// per interrupt)` tuples and generate a pair of immutable and mutable accessor functions.
+macro_rules! define_context_extended_registers {
+    // Public variant.
+    ($( ( $reg:ident, $reg_mut:ident, $type:ty, $bits:expr ) ),* $(,,)?) => {
+        define_context_extended_registers!(@step 0 ; $( ( $reg, $reg_mut, $type, $bits ) ),* );
+    };
+
+    // The stop condition output the sum of bits per interrupt constant.
+    ( @step $n:expr ; ) => {
+        const BITS_PER_ESPI: usize = $n;
+    };
+
+    // Recursive step: generate a pair of functions, then munch the rest.
+    ( @step $n:expr ;
+      ( $reg:ident, $reg_mut:ident, $type:ty, $bits:expr ) $(, $rest:tt)*
+    ) => {
+        #[doc = "Autogenerated function to access "]
+        #[doc = stringify!($reg)]
+        #[doc = " registers."]
+        pub fn $reg(&self) -> &[$type] {
+            transmute_ref!(&self.iregs_e[Self::espi_reg_index($n..($n + $bits))])
+        }
+
+        #[doc = "Autogenerated function to mutable access "]
+        #[doc = stringify!($reg)]
+        #[doc = " registers."]
+        pub fn $reg_mut(&mut self) -> &mut [$type] {
+            transmute_mut!(&mut self.iregs_e[Self::espi_reg_index($n..($n + $bits))])
+        }
+
+        define_context_extended_registers!(@step $n + $bits ; $( $rest ),*);
+    };
+}
+
+/// Context of the GIC distributor.
+///
+/// It contains a set of registers that has to be save/restored on distributor power off/on.
+/// Use `GicDistributorContext::ireg_count` and `GicDistributorContext::ireg_e_count` to determine
+/// the const parameters based on the SPI and ESPI counts.
+///
+/// ```
+/// use arm_gic::gicv3::distributor::GicDistributorContext;
+///
+/// let context_no_extended =
+///     GicDistributorContext::<{ GicDistributorContext::ireg_count(988) }, 0>::default();
+///
+/// let context_full = GicDistributorContext::<
+///     { GicDistributorContext::ireg_count(988) },
+///     { GicDistributorContext::ireg_e_count(1024) },
+/// >::default();
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GicDistributorContext<const IREG_COUNT: usize, const IREG_E_COUNT: usize> {
+    ctlr: GicdCtlr,
+    iregs: [u64; IREG_COUNT],
+    iregs_e: [u64; IREG_E_COUNT],
+}
+
+impl GicDistributorContext<0, 0> {
+    /// Calculates `IREG_COUNT` const parameter of `GicDistributorContext` based on the SPI count.
+    pub const fn ireg_count(spi_count: usize) -> usize {
+        let max_spi_index = spi_count + 32 + 4;
+
+        assert!(
+            (max_spi_index).is_multiple_of(32),
+            "max_spi_index must be multiple of 32"
+        );
+        (max_spi_index * GicDistributorContext::<0, 0>::BITS_PER_SPI).div_ceil(64)
+    }
+
+    /// Calculates `IREG_E_COUNT` const parameter of `GicDistributorContext` based on the ESPI count.
+    pub const fn ireg_e_count(espi_count: usize) -> usize {
+        assert!(
+            espi_count.is_multiple_of(32),
+            "espi_count must be multiple of 32"
+        );
+        (espi_count * GicDistributorContext::<0, 0>::BITS_PER_ESPI).div_ceil(64)
+    }
+}
+
+impl<const IREG_COUNT: usize, const IREG_E_COUNT: usize>
+    GicDistributorContext<IREG_COUNT, IREG_E_COUNT>
+{
+    const SPI_COUNT: usize = (IREG_COUNT * 64).div_ceil(Self::BITS_PER_SPI);
+    const ESPI_COUNT: usize = (IREG_E_COUNT * 64).div_ceil(Self::BITS_PER_ESPI);
 
     /// Creates a new empty instance of the distributor context.
     pub const fn new() -> Self {
         Self {
-            irouter: [0; Self::SPI_COUNT],
             ctlr: GicdCtlr::empty(),
-            igroupr: [0; Self::reg_count(Gicd::IGROUPR_BITS)],
-            isenabler: [0; Self::reg_count(Gicd::ISENABLER_BITS)],
-            ispendr: [0; Self::reg_count(Gicd::ISPENDR_BITS)],
-            isactiver: [0; Self::reg_count(Gicd::ISACTIVER_BITS)],
-            icfgr: [0; Self::reg_count(Gicd::ICFGR_BITS)],
-            igrpmodr: [0; Self::reg_count(Gicd::IGRPMODR_BITS)],
-            nsacr: [0; Self::reg_count(Gicd::NSACR_BITS)],
-            ipriorityr: [0; Self::SPI_COUNT],
-
-            irouter_e: [0; Self::ESPI_COUNT],
-            igroupr_e: [0; Self::ereg_count(Gicd::IGROUPR_BITS)],
-            isenabler_e: [0; Self::ereg_count(Gicd::ISENABLER_BITS)],
-            ispendr_e: [0; Self::ereg_count(Gicd::ISPENDR_BITS)],
-            isactiver_e: [0; Self::ereg_count(Gicd::ISACTIVER_BITS)],
-            icfgr_e: [0; Self::ereg_count(Gicd::ICFGR_BITS)],
-            igrpmodr_e: [0; Self::ereg_count(Gicd::IGRPMODR_BITS)],
-            nsacr_e: [0; Self::ereg_count(Gicd::NSACR_BITS)],
-            ipriorityr_e: [0; Self::ESPI_COUNT],
+            iregs: [0; IREG_COUNT],
+            iregs_e: [0; IREG_E_COUNT],
         }
     }
 
-    /// Calculates the SPI register count based on the bits per interrupt value.
-    const fn reg_count(bits_per_int: usize) -> usize {
-        (Self::SPI_COUNT * bits_per_int).div_ceil(32)
+    define_context_registers![
+        (irouter, irouter_mut, u64, Gicd::IROUTER_BITS),
+        (igroupr, igroupr_mut, u32, Gicd::IGROUPR_BITS),
+        (isenabler, isenabler_mut, u32, Gicd::ISENABLER_BITS),
+        (ispendr, ispendr_mut, u32, Gicd::ISPENDR_BITS),
+        (isactiver, isactiver_mut, u32, Gicd::ISACTIVER_BITS),
+        (icfgr, icfgr_mut, u32, Gicd::ICFGR_BITS),
+        (igrpmodr, igrpmodr_mut, u32, Gicd::IGRPMODR_BITS),
+        (nsacr, nsacr_mut, u32, Gicd::NSACR_BITS),
+        (ipriorityr, ipriorityr_mut, u8, Gicd::IPRIORITY_BITS)
+    ];
+
+    define_context_extended_registers![
+        (irouter_e, irouter_e_mut, u64, Gicd::IROUTER_BITS),
+        (igroupr_e, igroupr_e_mut, u32, Gicd::IGROUPR_BITS),
+        (isenabler_e, isenabler_e_mut, u32, Gicd::ISENABLER_BITS),
+        (ispendr_e, ispendr_e_mut, u32, Gicd::ISPENDR_BITS),
+        (isactiver_e, isactiver_e_mut, u32, Gicd::ISACTIVER_BITS),
+        (icfgr_e, icfgr_e_mut, u32, Gicd::ICFGR_BITS),
+        (igrpmodr_e, igrpmodr_e_mut, u32, Gicd::IGRPMODR_BITS),
+        (nsacr_e, nsacr_e_mut, u32, Gicd::NSACR_BITS),
+        (ipriorityr_e, ipriorityr_e_mut, u8, Gicd::IPRIORITY_BITS)
+    ];
+
+    const fn spi_reg_index(bits: Range<usize>) -> Range<usize> {
+        const {
+            assert!(
+                IREG_COUNT.is_multiple_of(Self::BITS_PER_SPI),
+                "IREG_COUNT must be multiple of BITS_PER_SPI"
+            )
+        };
+        ((bits.start * Self::SPI_COUNT).div_ceil(64))..((bits.end * Self::SPI_COUNT).div_ceil(64))
     }
 
-    /// Calculates the ESPI register count based on the bits per interrupt value.
-    const fn ereg_count(bits_per_int: usize) -> usize {
-        (Self::ESPI_COUNT * bits_per_int).div_ceil(32)
+    const fn espi_reg_index(bits: Range<usize>) -> Range<usize> {
+        const {
+            assert!(
+                IREG_E_COUNT.is_multiple_of(Self::BITS_PER_ESPI),
+                "IREG_E_COUNT must be multiple of BITS_PER_ESPI"
+            )
+        };
+        ((bits.start * Self::ESPI_COUNT).div_ceil(64))..((bits.end * Self::ESPI_COUNT).div_ceil(64))
     }
 }
 
-impl Default for GicDistributorContext {
+impl<const IREG_COUNT: usize, const IREG_E_COUNT: usize> Default
+    for GicDistributorContext<IREG_COUNT, IREG_E_COUNT>
+{
     fn default() -> Self {
         Self::new()
     }
@@ -422,7 +510,10 @@ impl<'a> GicDistributor<'a> {
     /// state. This function must be invoked prior to Redistributor restore and CPU interface
     /// enable. The pending and active interrupts are restored after the interrupts are fully
     /// configured and enabled.
-    pub fn restore(&mut self, context: &GicDistributorContext) {
+    pub fn restore<const IREG_COUNT: usize, const IREG_E_COUNT: usize>(
+        &mut self,
+        context: &GicDistributorContext<IREG_COUNT, IREG_E_COUNT>,
+    ) {
         // Clear the "enable" bits for G0/G1S/G1NS interrupts before configuring the ARE_S bit. The
         // Distributor might generate a system error otherwise.
         self.modify_control(
@@ -433,13 +524,26 @@ impl<'a> GicDistributor<'a> {
         // Set the ARE_S and ARE_NS bit now that interrupts have been disabled
         self.modify_control(GicdCtlr::ARE_S | GicdCtlr::ARE_NS, true);
 
-        let spi_count = self.spi_count();
-        let espi_count = self.espi_count();
+        let spi_count = Self::min_count(
+            self.spi_count(),
+            GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::SPI_COUNT,
+        );
+
+        let espi_count = Self::min_count(
+            self.espi_count(),
+            GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::ESPI_COUNT,
+        );
 
         // IGROUPR(_E)
-        restore_regs!(context, self.regs, igroupr, spi_count, Gicd::IGROUPR_BITS);
         restore_regs!(
-            context,
+            context.igroupr(),
+            self.regs,
+            igroupr,
+            spi_count,
+            Gicd::IGROUPR_BITS
+        );
+        restore_regs!(
+            context.igroupr_e(),
             self.regs,
             igroupr_e,
             espi_count,
@@ -449,14 +553,14 @@ impl<'a> GicDistributor<'a> {
 
         // IPRIORITY(_E)
         restore_regs!(
-            context,
+            context.ipriorityr(),
             self.regs,
             ipriorityr,
             spi_count,
             Gicd::IPRIORITY_BITS
         );
         restore_regs!(
-            context,
+            context.ipriorityr_e(),
             self.regs,
             ipriorityr_e,
             espi_count,
@@ -465,13 +569,32 @@ impl<'a> GicDistributor<'a> {
         );
 
         // ICFGR(_E)
-        restore_regs!(context, self.regs, icfgr, spi_count, Gicd::ICFGR_BITS);
-        restore_regs!(context, self.regs, icfgr_e, espi_count, Gicd::ICFGR_BITS, 0);
+        restore_regs!(
+            context.icfgr(),
+            self.regs,
+            icfgr,
+            spi_count,
+            Gicd::ICFGR_BITS
+        );
+        restore_regs!(
+            context.icfgr_e(),
+            self.regs,
+            icfgr_e,
+            espi_count,
+            Gicd::ICFGR_BITS,
+            0
+        );
 
         // IGRPMODR(_E)
-        restore_regs!(context, self.regs, igrpmodr, spi_count, Gicd::IGRPMODR_BITS);
         restore_regs!(
-            context,
+            context.igrpmodr(),
+            self.regs,
+            igrpmodr,
+            spi_count,
+            Gicd::IGRPMODR_BITS
+        );
+        restore_regs!(
+            context.igrpmodr_e(),
             self.regs,
             igrpmodr_e,
             espi_count,
@@ -480,12 +603,25 @@ impl<'a> GicDistributor<'a> {
         );
 
         // NSACR(_E)
-        restore_regs!(context, self.regs, nsacr, spi_count, Gicd::NSACR_BITS);
-        restore_regs!(context, self.regs, nsacr_e, espi_count, Gicd::NSACR_BITS, 0);
+        restore_regs!(
+            context.nsacr(),
+            self.regs,
+            nsacr,
+            spi_count,
+            Gicd::NSACR_BITS
+        );
+        restore_regs!(
+            context.nsacr_e(),
+            self.regs,
+            nsacr_e,
+            espi_count,
+            Gicd::NSACR_BITS,
+            0
+        );
 
         // IROUTER(_E)
         restore_regs!(
-            context,
+            context.irouter(),
             self.regs,
             irouter,
             spi_count,
@@ -493,7 +629,7 @@ impl<'a> GicDistributor<'a> {
             0
         );
         restore_regs!(
-            context,
+            context.irouter_e(),
             self.regs,
             irouter_e,
             espi_count,
@@ -505,14 +641,14 @@ impl<'a> GicDistributor<'a> {
 
         // ISENABLER(_E)
         restore_regs!(
-            context,
+            context.isenabler(),
             self.regs,
             isenabler,
             spi_count,
             Gicd::ISENABLER_BITS
         );
         restore_regs!(
-            context,
+            context.isenabler_e(),
             self.regs,
             isenabler_e,
             espi_count,
@@ -521,9 +657,15 @@ impl<'a> GicDistributor<'a> {
         );
 
         // ISPENDR(_E)
-        restore_regs!(context, self.regs, ispendr, spi_count, Gicd::ISPENDR_BITS);
         restore_regs!(
-            context,
+            context.ispendr(),
+            self.regs,
+            ispendr,
+            spi_count,
+            Gicd::ISPENDR_BITS
+        );
+        restore_regs!(
+            context.ispendr_e(),
             self.regs,
             ispendr_e,
             espi_count,
@@ -533,14 +675,14 @@ impl<'a> GicDistributor<'a> {
 
         // ISACTIVER(_E)
         restore_regs!(
-            context,
+            context.isactiver(),
             self.regs,
             isactiver,
             spi_count,
             Gicd::ISACTIVER_BITS
         );
         restore_regs!(
-            context,
+            context.isactiver_e(),
             self.regs,
             isactiver_e,
             espi_count,
@@ -556,9 +698,19 @@ impl<'a> GicDistributor<'a> {
     /// Saves the GIC Distributor register context.
     ///
     /// This function must be invoked after CPU interface disable and Redistributor save.
-    pub fn save(&self, context: &mut GicDistributorContext) {
-        let spi_count = self.spi_count();
-        let espi_count = self.espi_count();
+    pub fn save<const IREG_COUNT: usize, const IREG_E_COUNT: usize>(
+        &self,
+        context: &mut GicDistributorContext<IREG_COUNT, IREG_E_COUNT>,
+    ) {
+        let spi_count = Self::min_count(
+            self.spi_count(),
+            GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::SPI_COUNT,
+        );
+
+        let espi_count = Self::min_count(
+            self.espi_count(),
+            GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::ESPI_COUNT,
+        );
 
         self.wait_for_pending_write();
 
@@ -566,9 +718,15 @@ impl<'a> GicDistributor<'a> {
         context.ctlr = field_shared!(self.regs, ctlr).read();
 
         // IGROUPR_BITS
-        save_regs!(context, self.regs, igroupr, spi_count, Gicd::IGROUPR_BITS);
         save_regs!(
-            context,
+            context.igroupr_mut(),
+            self.regs,
+            igroupr,
+            spi_count,
+            Gicd::IGROUPR_BITS
+        );
+        save_regs!(
+            context.igroupr_e_mut(),
             self.regs,
             igroupr_e,
             espi_count,
@@ -578,14 +736,14 @@ impl<'a> GicDistributor<'a> {
 
         // ISENABLER(_E)
         save_regs!(
-            context,
+            context.isenabler_mut(),
             self.regs,
             isenabler,
             spi_count,
             Gicd::ISENABLER_BITS
         );
         save_regs!(
-            context,
+            context.isenabler_e_mut(),
             self.regs,
             isenabler_e,
             espi_count,
@@ -594,9 +752,15 @@ impl<'a> GicDistributor<'a> {
         );
 
         // ISPENDR(_E)
-        save_regs!(context, self.regs, ispendr, spi_count, Gicd::ISPENDR_BITS);
         save_regs!(
-            context,
+            context.ispendr_mut(),
+            self.regs,
+            ispendr,
+            spi_count,
+            Gicd::ISPENDR_BITS
+        );
+        save_regs!(
+            context.ispendr_e_mut(),
             self.regs,
             ispendr_e,
             espi_count,
@@ -606,14 +770,14 @@ impl<'a> GicDistributor<'a> {
 
         // ISACTIVER(_E)
         save_regs!(
-            context,
+            context.isactiver_mut(),
             self.regs,
             isactiver,
             spi_count,
             Gicd::ISACTIVER_BITS
         );
         save_regs!(
-            context,
+            context.isactiver_e_mut(),
             self.regs,
             isactiver_e,
             espi_count,
@@ -623,14 +787,14 @@ impl<'a> GicDistributor<'a> {
 
         // IPRIORITY(_E)
         save_regs!(
-            context,
+            context.ipriorityr_mut(),
             self.regs,
             ipriorityr,
             spi_count,
             Gicd::IPRIORITY_BITS
         );
         save_regs!(
-            context,
+            context.ipriorityr_e_mut(),
             self.regs,
             ipriorityr_e,
             espi_count,
@@ -639,13 +803,32 @@ impl<'a> GicDistributor<'a> {
         );
 
         // ICFGR(_E)
-        save_regs!(context, self.regs, icfgr, spi_count, Gicd::ICFGR_BITS);
-        save_regs!(context, self.regs, icfgr_e, espi_count, Gicd::ICFGR_BITS, 0);
+        save_regs!(
+            context.icfgr_mut(),
+            self.regs,
+            icfgr,
+            spi_count,
+            Gicd::ICFGR_BITS
+        );
+        save_regs!(
+            context.icfgr_e_mut(),
+            self.regs,
+            icfgr_e,
+            espi_count,
+            Gicd::ICFGR_BITS,
+            0
+        );
 
         // IGRPMODR(_E)
-        save_regs!(context, self.regs, igrpmodr, spi_count, Gicd::IGRPMODR_BITS);
         save_regs!(
-            context,
+            context.igrpmodr_mut(),
+            self.regs,
+            igrpmodr,
+            spi_count,
+            Gicd::IGRPMODR_BITS
+        );
+        save_regs!(
+            context.igrpmodr_e_mut(),
             self.regs,
             igrpmodr_e,
             espi_count,
@@ -654,12 +837,25 @@ impl<'a> GicDistributor<'a> {
         );
 
         // NSACR(_E)
-        save_regs!(context, self.regs, nsacr, spi_count, Gicd::NSACR_BITS);
-        save_regs!(context, self.regs, nsacr_e, espi_count, Gicd::NSACR_BITS, 0);
+        save_regs!(
+            context.nsacr_mut(),
+            self.regs,
+            nsacr,
+            spi_count,
+            Gicd::NSACR_BITS
+        );
+        save_regs!(
+            context.nsacr_e_mut(),
+            self.regs,
+            nsacr_e,
+            espi_count,
+            Gicd::NSACR_BITS,
+            0
+        );
 
         // IROUTER(_E)
         save_regs!(
-            context,
+            context.irouter_mut(),
             self.regs,
             irouter,
             spi_count,
@@ -667,7 +863,7 @@ impl<'a> GicDistributor<'a> {
             0
         );
         save_regs!(
-            context,
+            context.irouter_e_mut(),
             self.regs,
             irouter_e,
             espi_count,
@@ -694,6 +890,12 @@ impl<'a> GicDistributor<'a> {
     fn espi_count(&self) -> usize {
         let typer = field_shared!(self.regs, typer).read();
         typer.num_espis() as usize
+    }
+
+    /// Returns `min(implemented, stored)` or panics if `implemented > stored`.
+    fn min_count(implemented: usize, stored: usize) -> usize {
+        assert!(implemented <= stored);
+        implemented
     }
 }
 
@@ -1082,8 +1284,104 @@ mod tests {
     }
 
     #[test]
+    fn context_size() {
+        assert_eq!(
+            (4usize + 512 * 81 / 8).next_multiple_of(size_of::<usize>()),
+            size_of::<GicDistributorContext::<{ GicDistributorContext::ireg_count(476) }, 0>>()
+        );
+
+        assert_eq!(
+            (4usize + 512 * 81 / 8 + 512 * 81 / 8).next_multiple_of(size_of::<usize>()),
+            size_of::<
+                GicDistributorContext::<
+                    { GicDistributorContext::ireg_count(476) },
+                    { GicDistributorContext::ireg_e_count(512) },
+                >,
+            >()
+        );
+
+        assert_eq!(
+            (4usize + 1024 * 81 / 8 + 1024 * 81 / 8).next_multiple_of(size_of::<usize>()),
+            size_of::<
+                GicDistributorContext::<
+                    { GicDistributorContext::ireg_count(988) },
+                    { GicDistributorContext::ireg_e_count(1024) },
+                >,
+            >()
+        );
+    }
+
+    #[test]
     fn save_restore() {
-        let mut context = GicDistributorContext::new();
+        let mut context = GicDistributorContext::<
+            { GicDistributorContext::ireg_count(988) },
+            { GicDistributorContext::ireg_e_count(0) },
+        >::new();
+
+        let saved_offsets = [
+            0x0000..=0x0000, // GICD_CTLR
+            0x0084..=0x00fc, // GICD_IGROUPR
+            0x0104..=0x017c, // GICD_ISENABLER
+            0x0204..=0x027c, // GICD_ISPENDR
+            0x0304..=0x037c, // GICD_ISACTIVER
+            0x0420..=0x07f8, // GICD_IPRIORITYR
+            0x0c08..=0x0cfc, // GICD_ICFGR
+            0x0d04..=0x0d7c, // GICD_IGRPMODR
+            0x0e08..=0x0efc, // GICD_NSACR
+            0x6100..=0x7fd8, // GICD_IROUTER
+        ];
+
+        fn generate_value(offset: usize) -> u32 {
+            (offset * 2 + 1) as u32
+        }
+
+        let mut regs = FakeDistributor::new();
+
+        // GICD_TYPER.ITLinesNumber = 31
+        regs.regs_write(0x0004, 0x0000_001f);
+
+        // Fill registers with values
+        for offset_range in &saved_offsets {
+            for offset in offset_range.clone().step_by(4) {
+                regs.regs_write(offset, generate_value(offset));
+            }
+        }
+
+        // Save redistributor registers
+        {
+            let distributor = regs.distributor_for_test();
+            distributor.save(&mut context);
+        }
+
+        // Create clean redistributor and restore registers
+        regs.clear();
+
+        // GICD_TYPER.ITLinesNumber = 31
+        regs.regs_write(0x0004, 0x0000_001f);
+
+        {
+            let mut distributor = regs.distributor_for_test();
+            distributor.restore(&context);
+        }
+
+        // Validate registers
+        for offset_range in saved_offsets {
+            for offset in offset_range.step_by(4) {
+                assert_eq!(
+                    generate_value(offset),
+                    regs.reg_read(offset),
+                    "offset {offset:#x}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn save_restore_extended() {
+        let mut context = GicDistributorContext::<
+            { GicDistributorContext::ireg_count(988) },
+            { GicDistributorContext::ireg_e_count(1024) },
+        >::new();
 
         let saved_offsets = [
             0x0000..=0x0000, // GICD_CTLR
