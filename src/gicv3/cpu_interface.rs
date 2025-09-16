@@ -151,21 +151,21 @@ impl GicCpuInterface {
         write_icc_sre_el3(value);
     }
 
-    /// Disable IRQ and FIQ bypass for EL1.
+    /// Disables IRQ and FIQ bypass for EL1.
     pub fn disable_legacy_interrupt_bypass_el1(disable: bool) {
         let mut value = read_icc_sre_el1();
         value.set(IccSreEl1::DFB | IccSreEl1::DIB, disable);
         write_icc_sre_el1(value);
     }
 
-    /// Disable IRQ and FIQ bypass for EL2.
+    /// Disables IRQ and FIQ bypass for EL2.
     pub fn disable_legacy_interrupt_bypass_el2(disable: bool) {
         let mut value = read_icc_sre_el2();
         value.set(IccSreEl23::DFB | IccSreEl23::DIB, disable);
         write_icc_sre_el2(value);
     }
 
-    /// Disable IRQ and FIQ bypass for EL3.
+    /// Disables IRQ and FIQ bypass for EL3.
     pub fn disable_legacy_interrupt_bypass_el3(disable: bool) {
         let mut value = read_icc_sre_el3();
         value.set(IccSreEl23::DFB | IccSreEl23::DIB, disable);

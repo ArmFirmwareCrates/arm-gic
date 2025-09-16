@@ -251,37 +251,37 @@ impl<'a> GicV3<'a> {
         }
     }
 
-    /// Returns redistributor instance of the given CPU index.
+    /// Returns the redistributor instance for the given CPU index.
     pub fn redistributor(&mut self, cpu: usize) -> GicRedistributor<'_> {
         GicRedistributor::new(self.gicr_sgi_ptr(cpu))
     }
 
-    /// Blocks until register write for the current Security state is no longer in progress.
+    /// Blocks until a distributor register write for the current Security state is no longer in progress.
     pub fn gicd_barrier(&self) {
         self.gicd.wait_for_pending_write();
     }
 
-    /// Clears specified bits in GIC distributor control register.
+    /// Clears the specified bits in the GIC distributor control register.
     pub fn gicd_clear_control(&mut self, flags: GicdCtlr) {
         self.gicd.modify_control(flags, false);
     }
 
-    /// Sets specified bits in GIC distributor control register.
+    /// Sets the specified bits in the GIC distributor control register.
     pub fn gicd_set_control(&mut self, flags: GicdCtlr) {
         self.gicd.modify_control(flags, true);
     }
 
-    /// Blocks until register write for the current Security state is no longer in progress.
+    /// Blocks until a redistributor register write for the current Security state is no longer in progress.
     pub fn gicr_barrier(&mut self, cpu: usize) {
         self.redistributor(cpu).wait_for_pending_write();
     }
 
-    /// Power on GIC-600 or GIC-700 redistributor (if detected).
+    /// Powers on GIC-600 or GIC-700 redistributor (if detected).
     pub fn gicr_power_on(&mut self, cpu: usize) {
         self.redistributor(cpu).power_on();
     }
 
-    /// Power off GIC-600 or GIC-700 redistributor (if detected).
+    /// Powers off GIC-600 or GIC-700 redistributor (if detected).
     pub fn gicr_power_off(&mut self, cpu: usize) {
         self.redistributor(cpu).power_off();
     }

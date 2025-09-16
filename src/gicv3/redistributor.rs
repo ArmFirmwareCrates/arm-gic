@@ -12,7 +12,7 @@ use crate::{
 use core::{hint::spin_loop, marker::PhantomData, ptr::NonNull};
 use safe_mmio::{UniqueMmioPointer, field, field_shared};
 
-/// Read register and store it in a context structure.
+/// Reads a GICR register and stores it in a context structure.
 macro_rules! save_reg {
     ($context:ident, $regs:expr, $reg:ident) => {
         $context.$reg = field_shared!($regs, $reg).read();
@@ -22,7 +22,7 @@ macro_rules! save_reg {
     };
 }
 
-/// Restore register value from a context structure.
+/// Restores a GICR register value from a context structure.
 macro_rules! restore_reg {
     ($context:ident, $regs:expr, $reg:ident) => {
         field!($regs, $reg).write($context.$reg);
@@ -60,7 +60,7 @@ macro_rules! set_regs {
     };
 }
 
-/// Read registers and store them in a context structure.
+/// Reads GICR registers and store them in a context structure.
 macro_rules! save_regs {
     ($context:ident, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
         let reg_count = register_count!($int_count, $bits_per_int, $context.$reg[0]);
@@ -70,7 +70,7 @@ macro_rules! save_regs {
     };
 }
 
-/// Restore register values from a context structure.
+/// Restores GICR register values from a context structure.
 macro_rules! restore_regs {
     ($context:ident, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
         let reg_count = register_count!($int_count, $bits_per_int, $context.$reg[0]);
@@ -88,9 +88,10 @@ pub struct GicRedistributorIterator<'a> {
 }
 
 impl GicRedistributorIterator<'_> {
-    /// Create new iterator instance.
+    /// Creates a new iterator instance.
     ///
     /// # Safety
+    ///
     /// The caller must ensure that `base` points to a continiously mapped GIC redistributor memory
     /// area that spans until the last redistributor block (N) where GICR_TYPER.Last is set and
     /// there must be no other references to this area.
@@ -140,8 +141,9 @@ impl<'a> Iterator for GicRedistributorIterator<'a> {
     }
 }
 
-/// Context of the GIC redistributor. It contains a set of registers that has to be saved/restored
-/// on redistributor power off/on.
+/// Context of the GIC redistributor.
+///
+/// This contains a set of registers that have to be saved/restored on redistributor power off/on.
 #[derive(Debug, Default)]
 pub struct GicRedistributorContext {
     propbaser: u64,
@@ -161,6 +163,7 @@ impl GicRedistributorContext {
     // TODO: create extended INTID feature and set variable accordingly
     const INT_COUNT: usize = 32;
 
+    /// Creates a new empty instance of the redistributor context.
     pub const fn new() -> Self {
         Self {
             propbaser: 0,
@@ -177,7 +180,7 @@ impl GicRedistributorContext {
         }
     }
 
-    /// Calculate the register count based on the bits per interrupt value.
+    /// Calculates the register count based on the bits per interrupt value.
     const fn reg_count(bits_per_int: usize) -> usize {
         Self::INT_COUNT * bits_per_int / 32
     }
@@ -189,7 +192,7 @@ pub struct GicRedistributor<'a> {
 }
 
 impl<'a> GicRedistributor<'a> {
-    /// Create new driver instance.
+    /// Creates a new driver instance for the GIC redistributor with the given registers.
     pub fn new(regs: UniqueMmioPointer<'a, GicrSgi>) -> Self {
         Self { regs }
     }
@@ -244,8 +247,9 @@ impl<'a> GicRedistributor<'a> {
         field!(sgi, ipriorityr).get(index).unwrap().write(priority);
     }
 
-    /// Configures the trigger type for the interrupt with the given ID. This function will panic if
-    /// invoked with a non-private IntId.
+    /// Configures the trigger type for the interrupt with the given ID.
+    ///
+    /// This function will panic if invoked with a non-private IntId.
     pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) {
         let index = intid.private_index().unwrap();
 
@@ -263,8 +267,9 @@ impl<'a> GicRedistributor<'a> {
         });
     }
 
-    /// Assigns the interrupt with id `intid` to interrupt group `group`. This function will panic
-    /// if invoked with a non-private IntId.
+    /// Assigns the interrupt with id `intid` to interrupt group `group`.
+    ///
+    /// This function will panic if invoked with a non-private IntId.
     pub fn set_group(&mut self, intid: IntId, group: Group) {
         let index = intid.private_index().unwrap();
 
@@ -282,8 +287,9 @@ impl<'a> GicRedistributor<'a> {
         }
     }
 
-    /// Enables or disables the interrupt with the given ID. This function will panic if invoked
-    /// with a non-private IntId.
+    /// Enables or disables the interrupt with the given ID.
+    ///
+    /// This function will panic if invoked with a non-private IntId.
     pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) {
         let index = intid.private_index().unwrap();
         let mut sgi = field!(self.regs, sgi);
@@ -313,10 +319,12 @@ impl<'a> GicRedistributor<'a> {
         }
     }
 
-    /// Function to restore the GIC Redistributor register context. It disables LPI and per-cpu
-    /// interrupts before it starts to restore the Redistributor. This function must be invoked
-    /// after Distributor restore but prior to CPU interface enable. The pending and active
-    /// interrupts are restored after the interrupts are fully configured and enabled.
+    /// Restores the given GIC Redistributor register context.
+    ///
+    /// This disables LPI and per-cpu interrupts before it starts to restore the Redistributor. This
+    /// function must be invoked after Distributor restore but prior to CPU interface enable. The
+    /// pending and active interrupts are restored after the interrupts are fully configured and
+    /// enabled.
     pub fn restore(&mut self, context: &GicRedistributorContext) {
         let ppi_count = self.ppi_count();
 
@@ -407,14 +415,14 @@ impl<'a> GicRedistributor<'a> {
         // TODO: handle GIC500/600 gicv3_distif_pre_save(proc_num);
     }
 
-    /// Power on GIC-600 or GIC-700 redistributor (if detected).
+    /// Powers on GIC-600 or GIC-700 redistributor (if detected).
     pub fn power_on(&mut self) {
         if self.is_gic600_700() {
             self.gic600_700_power_on();
         }
     }
 
-    /// Power off GIC-600 or GIC-700 redistributor (if detected).
+    /// Powers off GIC-600 or GIC-700 redistributor (if detected).
     pub fn power_off(&mut self) {
         if self.is_gic600_700() {
             self.gic600_700_power_off();
@@ -433,7 +441,7 @@ impl<'a> GicRedistributor<'a> {
         }
     }
 
-    /// Check whether the GIC model is GIC600 or GIC700.
+    /// Checks whether the GIC model is GIC600 or GIC700.
     fn is_gic600_700(&self) -> bool {
         let gicr = field_shared!(self.regs, gicr);
         let iidr = field_shared!(gicr, iidr).read();
@@ -443,7 +451,7 @@ impl<'a> GicRedistributor<'a> {
             || iidr.model_id() == GicrIidr::MODEL_ID_ARM_GIC_700
     }
 
-    /// GIC600/700 specific redistributor power on sequence.
+    /// Performs the GIC600/700 specific redistributor power on sequence.
     fn gic600_700_power_on(&mut self) {
         loop {
             // Wait until group not transitioning.
@@ -463,7 +471,7 @@ impl<'a> GicRedistributor<'a> {
         }
     }
 
-    /// GIC600/700 specific redistributor power off sequence.
+    /// Performs the GIC600/700 specific redistributor power off sequence.
     fn gic600_700_power_off(&mut self) {
         // Wait until group not transitioning.
         self.wait_until_group_not_in_transit();

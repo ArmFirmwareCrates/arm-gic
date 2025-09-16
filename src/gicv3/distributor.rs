@@ -141,6 +141,7 @@ impl GicDistributorContext {
     const SPI_COUNT: usize = 988;
     const ESPI_COUNT: usize = 1024;
 
+    /// Creates a new empty instance of the distributor context.
     pub const fn new() -> Self {
         Self {
             irouter: [0; Self::SPI_COUNT],
@@ -166,12 +167,12 @@ impl GicDistributorContext {
         }
     }
 
-    /// Calculate the SPI register count based on the bits per interrupt value.
+    /// Calculates the SPI register count based on the bits per interrupt value.
     const fn reg_count(bits_per_int: usize) -> usize {
         (Self::SPI_COUNT * bits_per_int).div_ceil(32)
     }
 
-    /// Calculate the ESPI register count based on the bits per interrupt value.
+    /// Calculates the ESPI register count based on the bits per interrupt value.
     const fn ereg_count(bits_per_int: usize) -> usize {
         (Self::ESPI_COUNT * bits_per_int).div_ceil(32)
     }
@@ -190,7 +191,7 @@ pub struct GicDistributor<'a> {
 }
 
 impl<'a> GicDistributor<'a> {
-    /// Create new driver instance.
+    /// Creates a new driver instance for the GIC distributor with the given registers.
     pub fn new(regs: UniqueMmioPointer<'a, Gicd>) -> Self {
         Self { regs }
     }
@@ -266,32 +267,32 @@ impl<'a> GicDistributor<'a> {
         field_shared!(self.regs, typer).read()
     }
 
-    /// Affinity Routing Enable, Non-secure state.
+    /// Enables affinity routing in non-secure state.
     pub fn enable_affinity_routing_non_secure(&mut self, enable: bool) {
         self.modify_control(GicdCtlr::ARE_NS, enable);
     }
 
-    /// Affinity Routing Enable, Secure state.
+    /// Enables affinity routing in secure state.
     pub fn enable_affinity_routing_secure(&mut self, enable: bool) {
         self.modify_control(GicdCtlr::ARE_S, enable);
     }
 
-    /// Enable Secure Group 1 interrupts.
+    /// Enables Secure Group 1 interrupts.
     pub fn enable_group1_secure(&mut self, enable: bool) {
         self.modify_control(GicdCtlr::EnableGrp1S, enable);
     }
 
-    /// Enable Non-secure Group 1 interrupts.
+    /// Enables Non-secure Group 1 interrupts.
     pub fn enable_group1_non_secure(&mut self, enable: bool) {
         self.modify_control(GicdCtlr::EnableGrp1NS, enable);
     }
 
-    /// Enable Group 0 interrupts.
+    /// Enables Group 0 interrupts.
     pub fn enable_group0(&mut self, enable: bool) {
         self.modify_control(GicdCtlr::EnableGrp0, enable);
     }
 
-    /// Set or clear bits of the control registers.
+    /// Sets or clear bits in the control register.
     pub fn modify_control(&mut self, bits: GicdCtlr, enable: bool) {
         let mut gicd_ctlr = field_shared!(self.regs, ctlr).read();
         gicd_ctlr.set(bits, enable);
@@ -415,12 +416,12 @@ impl<'a> GicDistributor<'a> {
         }
     }
 
-    /// Restores the GIC Distributor register context.
+    /// Restores the given GIC Distributor register context.
     ///
-    /// It disables G0, G1S and G1NS interrupt groups before it starts restore of the Distributor.
-    /// This function must be invoked prior to Redistributor restore and CPU interface enable. The
-    /// pending and active interrupts are restored after the interrupts are fully configured and
-    /// enabled.
+    /// This disables G0, G1S and G1NS interrupt groups before starting to restore the Distributor
+    /// state. This function must be invoked prior to Redistributor restore and CPU interface
+    /// enable. The pending and active interrupts are restored after the interrupts are fully
+    /// configured and enabled.
     pub fn restore(&mut self, context: &GicDistributorContext) {
         // Clear the "enable" bits for G0/G1S/G1NS interrupts before configuring the ARE_S bit. The
         // Distributor might generate a system error otherwise.
