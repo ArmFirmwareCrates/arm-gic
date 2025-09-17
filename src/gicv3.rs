@@ -106,21 +106,28 @@ fn set_regs<T>(
 #[derive(Debug)]
 pub struct GicV3<'a> {
     gicd: GicDistributor<'a>,
-    gicr_base: *mut GicrSgi,
+    gicr_base: NonNull<GicrSgi>,
     /// The number of CPU cores, and hence redistributors.
     cpu_count: usize,
-    /// The offset in bytes between the start of redistributor frames.
-    gicr_stride: usize,
+    /// The offset in `GicrSgi` frames between the start of redistributor frames.
+    gicr_frame_count: usize,
 }
 
-fn get_redistributor_window_size(gicr_base: *mut GicrSgi, gic_v4: bool) -> usize {
+/// Returns the frame count between redistributor blocks.
+///
+/// # Safety
+///
+/// The gicr_base must point to the GIC redistributor registers. This region must be mapped into
+/// the address space of the process as device memory, and not have any other aliases, either
+/// via another instance of this driver or otherwise.
+unsafe fn get_redistributor_frame_count(gicr_base: NonNull<GicrSgi>, gic_v4: bool) -> usize {
     if !gic_v4 {
-        return size_of::<GicrSgi>();
+        return 1;
     }
 
     // SAFETY: The caller of `GicV3::new` promised that `gicr_base` was valid
     // and there are no aliases.
-    let first_gicr_window = unsafe { UniqueMmioPointer::new(NonNull::new(gicr_base).unwrap()) };
+    let first_gicr_window = unsafe { UniqueMmioPointer::new(gicr_base) };
 
     let first_gicr = field_shared!(first_gicr_window, gicr);
 
@@ -131,10 +138,10 @@ fn get_redistributor_window_size(gicr_base: *mut GicrSgi, gic_v4: bool) -> usize
         // In this case GicV4 adds 2 frames:
         // vlpi: 64KiB
         // reserved: 64KiB
-        return size_of::<GicrSgi>() * 2;
+        2
+    } else {
+        1
     }
-
-    size_of::<GicrSgi>()
 }
 
 impl<'a> GicV3<'a> {
@@ -143,25 +150,21 @@ impl<'a> GicV3<'a> {
     ///
     /// # Safety
     ///
-    /// The given base addresses must point to the GIC distributor and redistributor registers
-    /// respectively. These regions must be mapped into the address space of the process as device
-    /// memory, and not have any other aliases, either via another instance of this driver or
-    /// otherwise.
+    /// The gicr_base must point to the GIC redistributor registers. This region must be mapped into
+    /// the address space of the process as device memory, and not have any other aliases, either
+    /// via another instance of this driver or otherwise.
     pub unsafe fn new(
-        gicd: *mut Gicd,
-        gicr_base: *mut GicrSgi,
+        gicd: UniqueMmioPointer<'a, Gicd>,
+        gicr_base: NonNull<GicrSgi>,
         cpu_count: usize,
         gic_v4: bool,
     ) -> Self {
         Self {
-            // SAFETY: Our caller promised that `gicd` is a valid and unique pointer to a GIC
-            // distributor.
-            gicd: GicDistributor::new(unsafe {
-                UniqueMmioPointer::new(NonNull::new(gicd).unwrap())
-            }),
+            gicd: GicDistributor::new(gicd),
             gicr_base,
             cpu_count,
-            gicr_stride: get_redistributor_window_size(gicr_base, gic_v4),
+            // Safety: The same safety requirements are propagated to the caller of this function.
+            gicr_frame_count: unsafe { get_redistributor_frame_count(gicr_base, gic_v4) },
         }
     }
 
@@ -312,11 +315,7 @@ impl<'a> GicV3<'a> {
 
         // SAFETY: The caller of `GicV3::new` promised that `gicr_base` and `gicr_stride` were valid
         // and there are no aliases.
-        Ok(unsafe {
-            UniqueMmioPointer::new(
-                NonNull::new(self.gicr_base.wrapping_byte_add(cpu * self.gicr_stride)).unwrap(),
-            )
-        })
+        Ok(unsafe { UniqueMmioPointer::new(self.gicr_base.add(cpu * self.gicr_frame_count)) })
     }
 
     /// Returns the redistributor instance for the given CPU index.

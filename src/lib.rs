@@ -13,19 +13,24 @@
 //! ```no_run
 //! use arm_gic::{
 //!     IntId,
+//!     UniqueMmioPointer,
 //!     gicv3::{
 //!         GicCpuInterface, GicV3, SgiTarget, SgiTargetGroup,
 //!         registers::{Gicd, GicrSgi},
 //!     },
 //!     irq_enable,
 //! };
+//! use core::ptr::NonNull;
 //!
 //! // Base addresses of the GICv3 distributor and redistributor.
 //! const GICD_BASE_ADDRESS: *mut Gicd = 0x800_0000 as _;
 //! const GICR_BASE_ADDRESS: *mut GicrSgi = 0x80A_0000 as _;
 //!
+//! let gicd = unsafe { UniqueMmioPointer::new(NonNull::new(GICD_BASE_ADDRESS).unwrap()) };
+//! let gicr = unsafe { NonNull::new(GICR_BASE_ADDRESS).unwrap() };
+//!
 //! // Initialise the GIC.
-//! let mut gic = unsafe { GicV3::new(GICD_BASE_ADDRESS, GICR_BASE_ADDRESS, 1, false) };
+//! let mut gic = unsafe { GicV3::new(gicd, gicr, 1, false) };
 //! gic.setup(0);
 //!
 //! // Configure an SGI and then send it to ourself.
@@ -54,6 +59,8 @@ pub mod gicv2;
 pub mod gicv3;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 mod sysreg;
+
+pub use safe_mmio::UniqueMmioPointer;
 
 #[cfg(feature = "fakes")]
 pub use sysreg::fake as sysreg_fake;
