@@ -22,13 +22,23 @@ use safe_mmio::{UniqueMmioPointer, field_shared, fields::ReadPureWrite};
 use thiserror::Error;
 use zerocopy::{Immutable, IntoBytes};
 
-/// An error which may be returned from operations on a GIC Redistributor.
+/// GICv3 error type.
 #[derive(Error, Debug, Clone, Copy, Eq, PartialEq)]
-pub enum GICRError {
-    #[error("Redistributor has already been notified that the connected core is awake")]
+pub enum GicError {
+    #[error("redistributor has already been notified that the connected core is awake")]
     AlreadyAwake,
-    #[error("Redistributor has already been notified that the connected core is asleep")]
+    #[error("redistributor has already been notified that the connected core is asleep")]
     AlreadyAsleep,
+    #[error("invalid redistributor index {0:?}")]
+    InvalidRedistributorIndex(usize),
+    #[error("invalid IntId for the CPU interface {0:?}")]
+    InvalidGicCpuIntid(IntId),
+    #[error("invalid IntId for the redistributor {0:?}")]
+    InvalidGicrIntid(IntId),
+    #[error("invalid IntId for the distributor {0:?}")]
+    InvalidGicdIntid(IntId),
+    #[error("the context size is smaller than the implemented interrupt count: {0:?} > {1:?}")]
+    InvalidContextSize(usize, usize),
 }
 
 /// Highest priority value of Group 0 and Secure Group 1 interrupts.
@@ -189,7 +199,9 @@ impl<'a> GicV3<'a> {
         {
             // Init redistributors
             for cpu in 0..self.cpu_count {
-                self.redistributor(cpu).configure_default_settings();
+                self.redistributor(cpu)
+                    .unwrap()
+                    .configure_default_settings();
             }
         }
 
@@ -203,12 +215,17 @@ impl<'a> GicV3<'a> {
     ///
     /// If it is an SGI or PPI then the CPU core on which to enable it must also be specified;
     /// otherwise this is ignored and may be `None`.
-    pub fn enable_interrupt(&mut self, intid: IntId, cpu: Option<usize>, enable: bool) {
+    pub fn enable_interrupt(
+        &mut self,
+        intid: IntId,
+        cpu: Option<usize>,
+        enable: bool,
+    ) -> Result<(), GicError> {
         if intid.is_private() {
-            self.redistributor(cpu.unwrap())
-                .enable_interrupt(intid, enable);
+            self.redistributor(cpu.unwrap())?
+                .enable_interrupt(intid, enable)
         } else {
-            self.gicd.enable_interrupt(intid, enable);
+            self.gicd.enable_interrupt(intid, enable)
         }
     }
 
@@ -217,7 +234,9 @@ impl<'a> GicV3<'a> {
         self.gicd.enable_all_interrupts(enable);
 
         for cpu in 0..self.cpu_count {
-            self.redistributor(cpu).enable_all_interrupts(enable);
+            self.redistributor(cpu)
+                .unwrap()
+                .enable_all_interrupts(enable);
         }
     }
 
@@ -225,33 +244,49 @@ impl<'a> GicV3<'a> {
     ///
     /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and
     /// 255 is the lowest.
-    pub fn set_interrupt_priority(&mut self, intid: IntId, cpu: Option<usize>, priority: u8) {
+    pub fn set_interrupt_priority(
+        &mut self,
+        intid: IntId,
+        cpu: Option<usize>,
+        priority: u8,
+    ) -> Result<(), GicError> {
         // Affinity routing is enabled, so use the GICR for SGIs and PPIs.
         if intid.is_private() {
-            self.redistributor(cpu.unwrap())
-                .set_interrupt_priority(intid, priority);
+            self.redistributor(cpu.unwrap())?
+                .set_interrupt_priority(intid, priority)
         } else {
-            self.gicd.set_interrupt_priority(intid, priority);
+            self.gicd.set_interrupt_priority(intid, priority)
         }
     }
 
     /// Configures the trigger type for the interrupt with the given ID.
-    pub fn set_trigger(&mut self, intid: IntId, cpu: Option<usize>, trigger: Trigger) {
+    pub fn set_trigger(
+        &mut self,
+        intid: IntId,
+        cpu: Option<usize>,
+        trigger: Trigger,
+    ) -> Result<(), GicError> {
         // Affinity routing is enabled, so use the GICR for SGIs and PPIs.
         if intid.is_private() {
-            self.redistributor(cpu.unwrap()).set_trigger(intid, trigger);
+            self.redistributor(cpu.unwrap())?
+                .set_trigger(intid, trigger)
         } else {
-            self.gicd.set_trigger(intid, trigger);
-        };
+            self.gicd.set_trigger(intid, trigger)
+        }
     }
 
     /// Assigns the interrupt with id `intid` to interrupt group `group`.
-    pub fn set_group(&mut self, intid: IntId, cpu: Option<usize>, group: Group) {
+    pub fn set_group(
+        &mut self,
+        intid: IntId,
+        cpu: Option<usize>,
+        group: Group,
+    ) -> Result<(), GicError> {
         if intid.is_private() {
-            self.redistributor(cpu.unwrap()).set_group(intid, group);
+            self.redistributor(cpu.unwrap())?.set_group(intid, group)
         } else {
-            self.gicd.set_group(intid, group);
-        };
+            self.gicd.set_group(intid, group)
+        }
     }
 
     /// Returns information about what the GIC implementation supports.
@@ -260,8 +295,8 @@ impl<'a> GicV3<'a> {
     }
 
     /// Returns information about selected GIC redistributor.
-    pub fn gicr_typer(&mut self, cpu: usize) -> GicrTyper {
-        self.redistributor(cpu).typer()
+    pub fn gicr_typer(&mut self, cpu: usize) -> Result<GicrTyper, GicError> {
+        Ok(self.redistributor(cpu)?.typer())
     }
 
     /// Returns the distributor instance.
@@ -270,20 +305,23 @@ impl<'a> GicV3<'a> {
     }
 
     /// Returns a pointer to the GIC redistributor, SGI and PPI registers.
-    fn gicr_sgi_ptr(&mut self, cpu: usize) -> UniqueMmioPointer<'_, GicrSgi> {
-        assert!(cpu < self.cpu_count);
+    fn gicr_sgi_ptr(&mut self, cpu: usize) -> Result<UniqueMmioPointer<'_, GicrSgi>, GicError> {
+        if cpu >= self.cpu_count {
+            return Err(GicError::InvalidRedistributorIndex(cpu));
+        }
+
         // SAFETY: The caller of `GicV3::new` promised that `gicr_base` and `gicr_stride` were valid
         // and there are no aliases.
-        unsafe {
+        Ok(unsafe {
             UniqueMmioPointer::new(
                 NonNull::new(self.gicr_base.wrapping_byte_add(cpu * self.gicr_stride)).unwrap(),
             )
-        }
+        })
     }
 
     /// Returns the redistributor instance for the given CPU index.
-    pub fn redistributor(&mut self, cpu: usize) -> GicRedistributor<'_> {
-        GicRedistributor::new(self.gicr_sgi_ptr(cpu))
+    pub fn redistributor(&mut self, cpu: usize) -> Result<GicRedistributor<'_>, GicError> {
+        Ok(GicRedistributor::new(self.gicr_sgi_ptr(cpu)?))
     }
 
     /// Blocks until a distributor register write for the current Security state is no longer in progress.
@@ -302,32 +340,35 @@ impl<'a> GicV3<'a> {
     }
 
     /// Blocks until a redistributor register write for the current Security state is no longer in progress.
-    pub fn gicr_barrier(&mut self, cpu: usize) {
-        self.redistributor(cpu).wait_for_pending_write();
+    pub fn gicr_barrier(&mut self, cpu: usize) -> Result<(), GicError> {
+        self.redistributor(cpu)?.wait_for_pending_write();
+        Ok(())
     }
 
     /// Powers on GIC-600 or GIC-700 redistributor (if detected).
-    pub fn gicr_power_on(&mut self, cpu: usize) {
-        self.redistributor(cpu).power_on();
+    pub fn gicr_power_on(&mut self, cpu: usize) -> Result<(), GicError> {
+        self.redistributor(cpu)?.power_on();
+        Ok(())
     }
 
     /// Powers off GIC-600 or GIC-700 redistributor (if detected).
-    pub fn gicr_power_off(&mut self, cpu: usize) {
-        self.redistributor(cpu).power_off();
+    pub fn gicr_power_off(&mut self, cpu: usize) -> Result<(), GicError> {
+        self.redistributor(cpu)?.power_off();
+        Ok(())
     }
 
     /// Informs the GIC redistributor that the core has awakened.
     ///
     /// Blocks until `GICR_WAKER.ChildrenAsleep` is cleared.
-    pub fn redistributor_mark_core_awake(&mut self, cpu: usize) -> Result<(), GICRError> {
-        self.redistributor(cpu).mark_core_awake()
+    pub fn redistributor_mark_core_awake(&mut self, cpu: usize) -> Result<(), GicError> {
+        self.redistributor(cpu)?.mark_core_awake()
     }
 
     /// Informs the GIC redistributor that the core is asleep.
     ///
     /// Blocks until `GICR_WAKER.ChildrenAsleep` is set.
-    pub fn redistributor_mark_core_asleep(&mut self, cpu: usize) -> Result<(), GICRError> {
-        self.redistributor(cpu).mark_core_asleep()
+    pub fn redistributor_mark_core_asleep(&mut self, cpu: usize) -> Result<(), GicError> {
+        self.redistributor(cpu)?.mark_core_asleep()
     }
 }
 

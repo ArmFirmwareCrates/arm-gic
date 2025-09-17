@@ -19,6 +19,8 @@
   - `GicV3::set_priority_mask` -> `GicCpuInterface::set_priority_mask`
 - Change the return value of `GicV2::enable_interrupt` from `Result<(), ()>` to `Result<(), Error>`
   to resolve `clippy::result_unit_err` warning.
+- Change function to return `Result<_, GicError>` instead of using `assert` or `unwrap` inside.
+- Merge `GICRError` into `GicError`.
 
 ### Improvements
 

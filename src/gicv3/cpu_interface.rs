@@ -5,6 +5,7 @@
 use crate::gicv3::{InterruptGroup, SgiTarget, SgiTargetGroup};
 use crate::{
     IntId,
+    gicv3::GicError,
     sysreg::{
         IccIgrpen1El3, IccIgrpenEl1, IccSreEl1, IccSreEl23, Sgir, read_icc_hppir0_el1,
         read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1, read_icc_igrpen1_el3,
@@ -93,8 +94,14 @@ impl GicCpuInterface {
     }
 
     /// Sends a group `group` software-generated interrupt (SGI) to the given cores.
-    pub fn send_sgi(intid: IntId, target: SgiTarget, group: SgiTargetGroup) {
-        assert!(intid.is_sgi());
+    pub fn send_sgi(
+        intid: IntId,
+        target: SgiTarget,
+        group: SgiTargetGroup,
+    ) -> Result<(), GicError> {
+        if !intid.is_sgi() {
+            return Err(GicError::InvalidGicCpuIntid(intid));
+        }
 
         let sgir = match target {
             SgiTarget::All => Sgir::all(intid),
@@ -111,6 +118,8 @@ impl GicCpuInterface {
             SgiTargetGroup::CurrentGroup1 => write_icc_sgi1r_el1(sgir),
             SgiTargetGroup::OtherGroup1 => write_icc_asgi1r_el1(sgir),
         }
+
+        Ok(())
     }
 
     /// Sets the priority mask for the current CPU core.
@@ -296,23 +305,37 @@ mod tests {
     fn send_sgi() {
         clear_regs();
 
-        GicCpuInterface::send_sgi(IntId::sgi(2), SgiTarget::All, SgiTargetGroup::Group0);
+        assert_eq!(
+            Ok(()),
+            GicCpuInterface::send_sgi(IntId::sgi(2), SgiTarget::All, SgiTargetGroup::Group0)
+        );
         assert_eq!(0x0000_0100_0200_0000, read_reg!(icc_sgi0r_el1).bits());
 
-        GicCpuInterface::send_sgi(
-            IntId::sgi(3),
-            SgiTarget::List {
-                affinity3: 0xab,
-                affinity2: 0xcd,
-                affinity1: 0xef,
-                target_list: 0x5a5b,
-            },
-            SgiTargetGroup::CurrentGroup1,
+        assert_eq!(
+            Ok(()),
+            GicCpuInterface::send_sgi(
+                IntId::sgi(3),
+                SgiTarget::List {
+                    affinity3: 0xab,
+                    affinity2: 0xcd,
+                    affinity1: 0xef,
+                    target_list: 0x5a5b,
+                },
+                SgiTargetGroup::CurrentGroup1,
+            )
         );
         assert_eq!(0x00ab_00cd_03ef_5a5b, read_reg!(icc_sgi1r_el1).bits());
 
-        GicCpuInterface::send_sgi(IntId::sgi(4), SgiTarget::All, SgiTargetGroup::OtherGroup1);
+        assert_eq!(
+            Ok(()),
+            GicCpuInterface::send_sgi(IntId::sgi(4), SgiTarget::All, SgiTargetGroup::OtherGroup1)
+        );
         assert_eq!(0x0000_0100_0400_0000, read_reg!(icc_asgi1r_el1).bits());
+
+        assert_eq!(
+            Err(GicError::InvalidGicCpuIntid(IntId::spi(0))),
+            GicCpuInterface::send_sgi(IntId::spi(0), SgiTarget::All, SgiTargetGroup::OtherGroup1)
+        );
     }
 
     #[test]

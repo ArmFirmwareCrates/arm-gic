@@ -4,7 +4,7 @@
 use crate::{
     IntId, Trigger,
     gicv3::{
-        GICRError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit, register_count,
+        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit, register_count,
         registers::{GicrCtlr, GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Sgi, Waker},
         set_bit, set_regs,
     },
@@ -294,17 +294,18 @@ impl<'a> GicRedistributor<'a> {
 
     /// Sets the interrupt priority of the given interrupt ID. This function will panic if invoked
     /// with a non-private IntId.
-    pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) {
-        let index = intid.private_index().unwrap();
+    pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) -> Result<(), GicError> {
+        let index = Self::private_index(intid)?;
         let mut sgi = field!(self.regs, sgi);
         field!(sgi, ipriorityr).get(index).unwrap().write(priority);
+        Ok(())
     }
 
     /// Configures the trigger type for the interrupt with the given ID.
     ///
     /// This function will panic if invoked with a non-private IntId.
-    pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) {
-        let index = intid.private_index().unwrap();
+    pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) -> Result<(), GicError> {
+        let index = Self::private_index(intid)?;
 
         const INT_PER_REGS: usize = 32 / Sgi::ICFGR_BITS;
         let reg_index = index / INT_PER_REGS;
@@ -318,13 +319,15 @@ impl<'a> GicRedistributor<'a> {
             Trigger::Edge => v | bit,
             Trigger::Level => v & !bit,
         });
+
+        Ok(())
     }
 
     /// Assigns the interrupt with id `intid` to interrupt group `group`.
     ///
     /// This function will panic if invoked with a non-private IntId.
-    pub fn set_group(&mut self, intid: IntId, group: Group) {
-        let index = intid.private_index().unwrap();
+    pub fn set_group(&mut self, intid: IntId, group: Group) -> Result<(), GicError> {
+        let index = Self::private_index(intid)?;
 
         let mut sgi = field!(self.regs, sgi);
         if let Group::Secure(sg) = group {
@@ -338,13 +341,15 @@ impl<'a> GicRedistributor<'a> {
             set_bit(field!(sgi, igroupr).into(), index);
             clear_bit(field!(sgi, igrpmodr).into(), index);
         }
+
+        Ok(())
     }
 
     /// Enables or disables the interrupt with the given ID.
     ///
     /// This function will panic if invoked with a non-private IntId.
-    pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) {
-        let index = intid.private_index().unwrap();
+    pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) -> Result<(), GicError> {
+        let index = Self::private_index(intid)?;
         let mut sgi = field!(self.regs, sgi);
 
         if enable {
@@ -352,6 +357,8 @@ impl<'a> GicRedistributor<'a> {
         } else {
             set_bit(field!(sgi, icenabler).into(), index);
         }
+
+        Ok(())
     }
 
     /// Enables or disables all PPI/SGI interrupts on the redistributor.
@@ -378,8 +385,11 @@ impl<'a> GicRedistributor<'a> {
     /// function must be invoked after Distributor restore but prior to CPU interface enable. The
     /// pending and active interrupts are restored after the interrupts are fully configured and
     /// enabled.
-    pub fn restore<const N: usize>(&mut self, context: &GicRedistributorContext<N>) {
-        let ppi_count = Self::min_count(self.ppi_count(), GicRedistributorContext::<N>::PPI_COUNT);
+    pub fn restore<const N: usize>(
+        &mut self,
+        context: &GicRedistributorContext<N>,
+    ) -> Result<(), GicError> {
+        let ppi_count = Self::min_count(self.ppi_count(), GicRedistributorContext::<N>::PPI_COUNT)?;
 
         // Call the post-restore hook that implements the IMP DEF sequence that may be required on
         // some GIC implementations. As this may need to access the Redistributor registers, we pass
@@ -472,10 +482,15 @@ impl<'a> GicRedistributor<'a> {
         let mut gicr = field!(self.regs, gicr);
         restore_reg!(context, gicr, ctlr);
         self.wait_for_pending_write();
+
+        Ok(())
     }
 
     /// Saves the current states of the GIC redistributor instance into a context structure.
-    pub fn save<const N: usize>(&self, context: &mut GicRedistributorContext<N>) {
+    pub fn save<const N: usize>(
+        &self,
+        context: &mut GicRedistributorContext<N>,
+    ) -> Result<(), GicError> {
         // Wait for any write to GICR_CTLR to complete before trying to save any state.
         self.wait_for_pending_write();
 
@@ -487,7 +502,7 @@ impl<'a> GicRedistributor<'a> {
         save_reg!(context, gicr, ctlr);
 
         // Save SGI registers
-        let ppi_count = Self::min_count(self.ppi_count(), GicRedistributorContext::<N>::PPI_COUNT);
+        let ppi_count = Self::min_count(self.ppi_count(), GicRedistributorContext::<N>::PPI_COUNT)?;
         let sgi = field_shared!(self.regs, sgi);
 
         save_reg!(context, sgi, nsacr);
@@ -538,6 +553,8 @@ impl<'a> GicRedistributor<'a> {
         // Call the pre-save hook that implements the IMP DEF sequence that may be required on some
         // GIC implementations..
         // TODO: handle GIC500/600 gicv3_distif_pre_save(proc_num);
+
+        Ok(())
     }
 
     /// Powers on GIC-600 or GIC-700 redistributor (if detected).
@@ -619,14 +636,14 @@ impl<'a> GicRedistributor<'a> {
     /// Informs the GIC redistributor that the core has awakened.
     ///
     /// Blocks until `GICR_WAKER.ChildrenAsleep` is cleared.
-    pub fn mark_core_awake(&mut self) -> Result<(), GICRError> {
+    pub fn mark_core_awake(&mut self) -> Result<(), GicError> {
         let mut gicr = field!(self.regs, gicr);
         let mut waker = field!(gicr, waker);
         let mut gicr_waker = waker.read();
 
         // The WAKER_PS_BIT should be changed to 0 only when WAKER_CA_BIT is 1.
         if !gicr_waker.contains(Waker::CHILDREN_ASLEEP) {
-            return Err(GICRError::AlreadyAwake);
+            return Err(GicError::AlreadyAwake);
         }
 
         // Mark the connected core as awake.
@@ -644,14 +661,14 @@ impl<'a> GicRedistributor<'a> {
     /// Informs the GIC redistributor that the core is asleep.
     ///
     /// Blocks until `GICR_WAKER.ChildrenAsleep` is set.
-    pub fn mark_core_asleep(&mut self) -> Result<(), GICRError> {
+    pub fn mark_core_asleep(&mut self) -> Result<(), GicError> {
         let mut gicr = field!(self.regs, gicr);
         let mut waker = field!(gicr, waker);
         let mut gicr_waker = waker.read();
 
         // The WAKER_PS_BIT should be changed to 1 only when WAKER_CA_BIT is 0.
         if gicr_waker.contains(Waker::CHILDREN_ASLEEP) {
-            return Err(GICRError::AlreadyAsleep);
+            return Err(GicError::AlreadyAsleep);
         }
 
         // Mark the connected core as asleep.
@@ -701,10 +718,21 @@ impl<'a> GicRedistributor<'a> {
         ppi_num as usize + 32
     }
 
-    /// Returns `min(implemented, stored)` or panics if `implemented > stored`.
-    fn min_count(implemented: usize, stored: usize) -> usize {
-        assert!(implemented <= stored);
-        implemented
+    /// Returns the index of a private interrupt ID or an error.
+    fn private_index(intid: IntId) -> Result<usize, GicError> {
+        match intid.private_index() {
+            Some(index) => Ok(index),
+            None => Err(GicError::InvalidGicrIntid(intid)),
+        }
+    }
+
+    /// Returns `min(implemented, stored)` or returns an error if `implemented > stored`.
+    fn min_count(implemented: usize, stored: usize) -> Result<usize, GicError> {
+        if implemented <= stored {
+            Ok(implemented)
+        } else {
+            Err(GicError::InvalidContextSize(implemented, stored))
+        }
     }
 }
 
@@ -848,7 +876,10 @@ mod tests {
 
         for test in tests {
             let mut redistributor = regs.redistributor_for_test();
-            redistributor.set_interrupt_priority(test.intid, test.param);
+            assert_eq!(
+                Ok(()),
+                redistributor.set_interrupt_priority(test.intid, test.param)
+            );
             assert_eq!(
                 test.expected_value,
                 regs.reg_read(test.offset),
@@ -858,9 +889,22 @@ mod tests {
         }
 
         let mut redistributor = regs.redistributor_for_test();
-        redistributor.set_interrupt_priority(IntId::sgi(0), 0xcd);
-        redistributor.set_interrupt_priority(IntId::sgi(1), 0xab);
-        redistributor.set_interrupt_priority(IntId::sgi(3), 0x12);
+        assert_eq!(
+            Ok(()),
+            redistributor.set_interrupt_priority(IntId::sgi(0), 0xcd)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_interrupt_priority(IntId::sgi(1), 0xab)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_interrupt_priority(IntId::sgi(3), 0x12)
+        );
+        assert_eq!(
+            Err(GicError::InvalidGicrIntid(IntId::spi(0))),
+            redistributor.set_interrupt_priority(IntId::spi(0), 0x12)
+        );
         assert_eq!(0x1200_abcd, regs.reg_read(0x1_0400));
     }
 
@@ -879,7 +923,7 @@ mod tests {
 
         for test in tests {
             let mut redistributor = regs.redistributor_for_test();
-            redistributor.set_trigger(test.intid, test.param);
+            assert_eq!(Ok(()), redistributor.set_trigger(test.intid, test.param));
             assert_eq!(
                 test.expected_value,
                 regs.reg_read(test.offset),
@@ -889,10 +933,26 @@ mod tests {
         }
 
         let mut redistributor = regs.redistributor_for_test();
-        redistributor.set_trigger(IntId::sgi(0), Trigger::Edge);
-        redistributor.set_trigger(IntId::sgi(1), Trigger::Edge);
-        redistributor.set_trigger(IntId::sgi(3), Trigger::Edge);
-        redistributor.set_trigger(IntId::sgi(3), Trigger::Level);
+        assert_eq!(
+            Ok(()),
+            redistributor.set_trigger(IntId::sgi(0), Trigger::Edge)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_trigger(IntId::sgi(1), Trigger::Edge)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_trigger(IntId::sgi(3), Trigger::Edge)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_trigger(IntId::sgi(3), Trigger::Level)
+        );
+        assert_eq!(
+            Err(GicError::InvalidGicrIntid(IntId::spi(0))),
+            redistributor.set_trigger(IntId::spi(0), Trigger::Level)
+        );
         assert_eq!(0x0000_000a, regs.reg_read(0x1_0c00));
     }
 
@@ -916,7 +976,7 @@ mod tests {
 
         for test in tests {
             let mut redistributor = regs.redistributor_for_test();
-            redistributor.set_group(test.intid, test.param);
+            assert_eq!(Ok(()), redistributor.set_group(test.intid, test.param));
 
             let expected_igroupr = (test.expected_value & 1) << (test.offset % 32);
             let exptected_igrpmodr = ((test.expected_value & 2) >> 1) << (test.offset % 32);
@@ -936,10 +996,26 @@ mod tests {
         }
 
         let mut redistributor = regs.redistributor_for_test();
-        redistributor.set_group(IntId::sgi(0), Group::Group1NS);
-        redistributor.set_group(IntId::sgi(1), Group::Secure(SecureIntGroup::Group0));
-        redistributor.set_group(IntId::sgi(3), Group::Secure(SecureIntGroup::Group1S));
-        redistributor.set_group(IntId::sgi(3), Group::Group1NS);
+        assert_eq!(
+            Ok(()),
+            redistributor.set_group(IntId::sgi(0), Group::Group1NS)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_group(IntId::sgi(1), Group::Secure(SecureIntGroup::Group0))
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_group(IntId::sgi(3), Group::Secure(SecureIntGroup::Group1S))
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_group(IntId::sgi(3), Group::Group1NS)
+        );
+        assert_eq!(
+            Err(GicError::InvalidGicrIntid(IntId::spi(0))),
+            redistributor.set_group(IntId::spi(0), Group::Group1NS)
+        );
         assert_eq!(0x0000_0009, regs.reg_read(0x1_0080));
         assert_eq!(0x0000_0000, regs.reg_read(0x1_0d00));
     }
@@ -959,7 +1035,10 @@ mod tests {
 
         for test in tests {
             let mut redistributor = regs.redistributor_for_test();
-            redistributor.enable_interrupt(test.intid, test.param);
+            assert_eq!(
+                Ok(()),
+                redistributor.enable_interrupt(test.intid, test.param)
+            );
             assert_eq!(
                 test.expected_value,
                 regs.reg_read(test.offset),
@@ -969,10 +1048,14 @@ mod tests {
         }
 
         let mut redistributor = regs.redistributor_for_test();
-        redistributor.enable_interrupt(IntId::sgi(0), true);
-        redistributor.enable_interrupt(IntId::sgi(1), true);
-        redistributor.enable_interrupt(IntId::sgi(3), true);
-        redistributor.enable_interrupt(IntId::sgi(3), false);
+        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(0), true));
+        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(1), true));
+        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(3), true));
+        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(3), false));
+        assert_eq!(
+            Err(GicError::InvalidGicrIntid(IntId::spi(0))),
+            redistributor.enable_interrupt(IntId::spi(0), false)
+        );
         assert_eq!(0x0000_000b, regs.reg_read(0x1_0100));
         assert_eq!(0x0000_0008, regs.reg_read(0x1_0180));
     }
@@ -1073,7 +1156,7 @@ mod tests {
         // Save redistributor registers
         {
             let redistributor = regs.redistributor_for_test();
-            redistributor.save(&mut context);
+            assert_eq!(Ok(()), redistributor.save(&mut context));
         }
 
         // Create clean redistributor and restore registers
@@ -1083,7 +1166,7 @@ mod tests {
 
         {
             let mut redistributor = regs.redistributor_for_test();
-            redistributor.restore(&context);
+            assert_eq!(Ok(()), redistributor.restore(&context));
         }
 
         // Validate registers
@@ -1136,7 +1219,7 @@ mod tests {
         // Save redistributor registers
         {
             let redistributor = regs.redistributor_for_test();
-            redistributor.save(&mut context);
+            assert_eq!(Ok(()), redistributor.save(&mut context));
         }
 
         // Create clean redistributor and restore registers
@@ -1147,7 +1230,7 @@ mod tests {
 
         {
             let mut redistributor = regs.redistributor_for_test();
-            redistributor.restore(&context);
+            assert_eq!(Ok(()), redistributor.restore(&context));
         }
 
         // Validate registers
@@ -1168,10 +1251,7 @@ mod tests {
 
         // GICR_WAKER.ChildrenAsleep = 0
         let mut redistributor = regs.redistributor_for_test();
-        assert_eq!(
-            Err(GICRError::AlreadyAwake),
-            redistributor.mark_core_awake()
-        );
+        assert_eq!(Err(GicError::AlreadyAwake), redistributor.mark_core_awake());
 
         // Cannot test further without waiting in infinite loop
     }
@@ -1185,7 +1265,7 @@ mod tests {
 
         let mut redistributor = regs.redistributor_for_test();
         assert_eq!(
-            Err(GICRError::AlreadyAsleep),
+            Err(GicError::AlreadyAsleep),
             redistributor.mark_core_asleep()
         );
 

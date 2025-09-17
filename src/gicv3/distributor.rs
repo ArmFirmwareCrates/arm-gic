@@ -4,7 +4,7 @@
 use crate::{
     IntId, Trigger,
     gicv3::{
-        Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit, register_count,
+        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit, register_count,
         registers::{Gicd, GicdCtlr, Typer},
         set_bit, set_regs,
     },
@@ -18,13 +18,14 @@ use zerocopy::{transmute_mut, transmute_ref};
 macro_rules! select_regs {
     ($regs:expr, $reg:ident, $reg_e:ident, $intid:expr) => {
         if $intid.0 < IntId::SPECIAL_START {
-            (field!($regs, $reg), $intid.0 as usize)
-        } else {
-            assert!($intid.is_espi());
-            (
+            Ok((field!($regs, $reg), $intid.0 as usize))
+        } else if ($intid.is_espi()) {
+            Ok((
                 field!($regs, $reg_e),
                 ($intid.0 - IntId::ESPI_START) as usize,
-            )
+            ))
+        } else {
+            Err(GicError::InvalidGicdIntid($intid))
         }
     };
 }
@@ -393,14 +394,15 @@ impl<'a> GicDistributor<'a> {
     ///
     /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and
     /// 255 is the lowest.
-    pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) {
-        let (mut registers, index) = select_regs!(self.regs, ipriorityr, ipriorityr_e, intid);
+    pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) -> Result<(), GicError> {
+        let (mut registers, index) = select_regs!(self.regs, ipriorityr, ipriorityr_e, intid)?;
         registers.get(index).unwrap().write(priority);
+        Ok(())
     }
 
     /// Configures the trigger type for the interrupt with the given ID.
-    pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) {
-        let (registers, index) = select_regs!(self.regs, icfgr, icfgr_e, intid);
+    pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) -> Result<(), GicError> {
+        let (registers, index) = select_regs!(self.regs, icfgr, icfgr_e, intid)?;
 
         // ICFGR contains two bit pairs per interrupt where the top bit marks the trigger type.
         let bit_index = index * Gicd::ICFGR_BITS + 1;
@@ -409,11 +411,13 @@ impl<'a> GicDistributor<'a> {
             Trigger::Edge => set_bit(registers.into(), bit_index),
             Trigger::Level => clear_bit(registers.into(), bit_index),
         };
+
+        Ok(())
     }
 
     /// When affinity routing is enabled, provides routing information for the SPI with INTID.
     /// If `mpidr` is `None`, interrupts are routed to any PE defined as a participating node.
-    pub fn set_routing(&mut self, intid: IntId, mpidr: Option<u64>) {
+    pub fn set_routing(&mut self, intid: IntId, mpidr: Option<u64>) -> Result<(), GicError> {
         const INTERRUPT_ROUTING_MODE: u64 = 1 << 31;
 
         let irouter = mpidr.unwrap_or(INTERRUPT_ROUTING_MODE);
@@ -424,44 +428,52 @@ impl<'a> GicDistributor<'a> {
                 .get(intid.0 as usize)
                 .unwrap()
                 .write(irouter);
-        } else {
+            Ok(())
+        } else if intid.is_espi() {
             let index = intid.espi_index().unwrap();
             field!(self.regs, irouter_e)
                 .get(index)
                 .unwrap()
                 .write(irouter);
+            Ok(())
+        } else {
+            Err(GicError::InvalidGicdIntid(intid))
         }
     }
 
     /// Assigns the interrupt with id `intid` to interrupt group `group`.
-    pub fn set_group(&mut self, intid: IntId, group: Group) {
+    pub fn set_group(&mut self, intid: IntId, group: Group) -> Result<(), GicError> {
         if let Group::Secure(sg) = group {
-            let (igroupr, index) = select_regs!(self.regs, igroupr, igroupr_e, intid);
+            let (igroupr, index) = select_regs!(self.regs, igroupr, igroupr_e, intid)?;
             clear_bit(igroupr.into(), index);
 
-            let (igrpmodr, index) = select_regs!(self.regs, igrpmodr, igrpmodr_e, intid);
+            let (igrpmodr, index) = select_regs!(self.regs, igrpmodr, igrpmodr_e, intid)?;
             match sg {
                 SecureIntGroup::Group1S => set_bit(igrpmodr.into(), index),
                 SecureIntGroup::Group0 => clear_bit(igrpmodr.into(), index),
             }
         } else {
-            let (igroupr, index) = select_regs!(self.regs, igroupr, igroupr_e, intid);
+            let (igroupr, index) = select_regs!(self.regs, igroupr, igroupr_e, intid)?;
             set_bit(igroupr.into(), index);
 
-            let (igrpmodr, index) = select_regs!(self.regs, igrpmodr, igrpmodr_e, intid);
+            let (igrpmodr, index) = select_regs!(self.regs, igrpmodr, igrpmodr_e, intid)?;
             clear_bit(igrpmodr.into(), index);
         }
+
+        Ok(())
     }
 
     /// Enables or disables the interrupt with the given ID.
-    pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) {
+    pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) -> Result<(), GicError> {
         if enable {
-            let (registers, index) = select_regs!(self.regs, isenabler, isenabler_e, intid);
+            let (registers, index) = select_regs!(self.regs, isenabler, isenabler_e, intid)?;
             set_bit(registers.into(), index);
         } else {
-            let (registers, index) = select_regs!(self.regs, icenabler, icenabler_e, intid);
+            let (registers, index) = select_regs!(self.regs, icenabler, icenabler_e, intid)?;
             set_bit(registers.into(), index);
         }
+
+        Ok(())
     }
 
     /// Enables or disables all interrupts on the distributor.
@@ -513,7 +525,7 @@ impl<'a> GicDistributor<'a> {
     pub fn restore<const IREG_COUNT: usize, const IREG_E_COUNT: usize>(
         &mut self,
         context: &GicDistributorContext<IREG_COUNT, IREG_E_COUNT>,
-    ) {
+    ) -> Result<(), GicError> {
         // Clear the "enable" bits for G0/G1S/G1NS interrupts before configuring the ARE_S bit. The
         // Distributor might generate a system error otherwise.
         self.modify_control(
@@ -527,12 +539,12 @@ impl<'a> GicDistributor<'a> {
         let spi_count = Self::min_count(
             self.spi_count(),
             GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::SPI_COUNT,
-        );
+        )?;
 
         let espi_count = Self::min_count(
             self.espi_count(),
             GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::ESPI_COUNT,
-        );
+        )?;
 
         // IGROUPR(_E)
         restore_regs!(
@@ -693,6 +705,8 @@ impl<'a> GicDistributor<'a> {
         // Restore the GICD_CTLR
         field!(self.regs, ctlr).write(context.ctlr);
         self.wait_for_pending_write();
+
+        Ok(())
     }
 
     /// Saves the GIC Distributor register context.
@@ -701,16 +715,16 @@ impl<'a> GicDistributor<'a> {
     pub fn save<const IREG_COUNT: usize, const IREG_E_COUNT: usize>(
         &self,
         context: &mut GicDistributorContext<IREG_COUNT, IREG_E_COUNT>,
-    ) {
+    ) -> Result<(), GicError> {
         let spi_count = Self::min_count(
             self.spi_count(),
             GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::SPI_COUNT,
-        );
+        )?;
 
         let espi_count = Self::min_count(
             self.espi_count(),
             GicDistributorContext::<IREG_COUNT, IREG_E_COUNT>::ESPI_COUNT,
-        );
+        )?;
 
         self.wait_for_pending_write();
 
@@ -870,6 +884,8 @@ impl<'a> GicDistributor<'a> {
             Gicd::IROUTER_BITS,
             0
         );
+
+        Ok(())
     }
 
     /// Waits until a register write for the current Security state is in progress.
@@ -892,10 +908,13 @@ impl<'a> GicDistributor<'a> {
         typer.num_espis() as usize
     }
 
-    /// Returns `min(implemented, stored)` or panics if `implemented > stored`.
-    fn min_count(implemented: usize, stored: usize) -> usize {
-        assert!(implemented <= stored);
-        implemented
+    /// Returns `min(implemented, stored)` or returns an error if `implemented > stored`.
+    fn min_count(implemented: usize, stored: usize) -> Result<usize, GicError> {
+        if implemented <= stored {
+            Ok(implemented)
+        } else {
+            Err(GicError::InvalidContextSize(implemented, stored))
+        }
     }
 }
 
@@ -1040,7 +1059,10 @@ mod tests {
 
         for test in tests {
             let mut distributor = regs.distributor_for_test();
-            distributor.set_interrupt_priority(test.intid, test.param);
+            assert_eq!(
+                Ok(()),
+                distributor.set_interrupt_priority(test.intid, test.param)
+            );
             assert_eq!(
                 test.expected_value,
                 regs.reg_read(test.offset),
@@ -1050,9 +1072,22 @@ mod tests {
         }
 
         let mut redistributor = regs.distributor_for_test();
-        redistributor.set_interrupt_priority(IntId::sgi(0), 0xcd);
-        redistributor.set_interrupt_priority(IntId::sgi(1), 0xab);
-        redistributor.set_interrupt_priority(IntId::sgi(3), 0x12);
+        assert_eq!(
+            Ok(()),
+            redistributor.set_interrupt_priority(IntId::sgi(0), 0xcd)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_interrupt_priority(IntId::sgi(1), 0xab)
+        );
+        assert_eq!(
+            Ok(()),
+            redistributor.set_interrupt_priority(IntId::sgi(3), 0x12)
+        );
+        assert_eq!(
+            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
+            redistributor.set_interrupt_priority(IntId::SPECIAL_NONSECURE, 0x12)
+        );
         assert_eq!(0x1200_abcd, regs.reg_read(0x0400));
     }
 
@@ -1071,7 +1106,7 @@ mod tests {
 
         for test in tests {
             let mut distributor = regs.distributor_for_test();
-            distributor.set_trigger(test.intid, test.param);
+            assert_eq!(Ok(()), distributor.set_trigger(test.intid, test.param));
             assert_eq!(
                 test.expected_value,
                 regs.reg_read(test.offset),
@@ -1081,10 +1116,26 @@ mod tests {
         }
 
         let mut distributor = regs.distributor_for_test();
-        distributor.set_trigger(IntId::sgi(0), Trigger::Edge);
-        distributor.set_trigger(IntId::sgi(1), Trigger::Edge);
-        distributor.set_trigger(IntId::sgi(3), Trigger::Edge);
-        distributor.set_trigger(IntId::sgi(3), Trigger::Level);
+        assert_eq!(
+            Ok(()),
+            distributor.set_trigger(IntId::sgi(0), Trigger::Edge)
+        );
+        assert_eq!(
+            Ok(()),
+            distributor.set_trigger(IntId::sgi(1), Trigger::Edge)
+        );
+        assert_eq!(
+            Ok(()),
+            distributor.set_trigger(IntId::sgi(3), Trigger::Edge)
+        );
+        assert_eq!(
+            Ok(()),
+            distributor.set_trigger(IntId::sgi(3), Trigger::Level)
+        );
+        assert_eq!(
+            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
+            distributor.set_trigger(IntId::SPECIAL_NONSECURE, Trigger::Level)
+        );
         assert_eq!(0x0000_000a, regs.reg_read(0x0c00));
     }
 
@@ -1104,7 +1155,7 @@ mod tests {
 
         for test in tests {
             let mut distributor = regs.distributor_for_test();
-            distributor.set_routing(test.intid, test.param);
+            assert_eq!(Ok(()), distributor.set_routing(test.intid, test.param));
             let lo = regs.reg_read(test.offset);
             let hi = regs.reg_read(test.offset + 4);
 
@@ -1112,6 +1163,12 @@ mod tests {
             assert_eq!(test.expected_value, actual, "test case: {test:x?}",);
             regs.clear();
         }
+
+        let mut distributor = regs.distributor_for_test();
+        assert_eq!(
+            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
+            distributor.set_routing(IntId::SPECIAL_NONSECURE, None)
+        );
     }
 
     #[test]
@@ -1150,7 +1207,7 @@ mod tests {
 
         for test in tests {
             let mut distributor = regs.distributor_for_test();
-            distributor.set_group(test.intid, test.param);
+            assert_eq!(Ok(()), distributor.set_group(test.intid, test.param));
 
             let expected_igroupr = (test.expected_value & 1) << (test.offset % 32);
             let exptected_igrpmodr = ((test.expected_value & 2) >> 1) << (test.offset % 32);
@@ -1181,10 +1238,26 @@ mod tests {
         }
 
         let mut distributor = regs.distributor_for_test();
-        distributor.set_group(IntId::sgi(0), Group::Group1NS);
-        distributor.set_group(IntId::sgi(1), Group::Secure(SecureIntGroup::Group0));
-        distributor.set_group(IntId::sgi(3), Group::Secure(SecureIntGroup::Group1S));
-        distributor.set_group(IntId::sgi(3), Group::Group1NS);
+        assert_eq!(
+            Ok(()),
+            distributor.set_group(IntId::sgi(0), Group::Group1NS)
+        );
+        assert_eq!(
+            Ok(()),
+            distributor.set_group(IntId::sgi(1), Group::Secure(SecureIntGroup::Group0))
+        );
+        assert_eq!(
+            Ok(()),
+            distributor.set_group(IntId::sgi(3), Group::Secure(SecureIntGroup::Group1S))
+        );
+        assert_eq!(
+            Ok(()),
+            distributor.set_group(IntId::sgi(3), Group::Group1NS)
+        );
+        assert_eq!(
+            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
+            distributor.set_group(IntId::SPECIAL_NONSECURE, Group::Group1NS)
+        );
         assert_eq!(0x0000_0009, regs.reg_read(0x0080));
         assert_eq!(0x0000_0000, regs.reg_read(0x0d00));
     }
@@ -1204,7 +1277,7 @@ mod tests {
 
         for test in tests {
             let mut distributor = regs.distributor_for_test();
-            distributor.enable_interrupt(test.intid, test.param);
+            assert_eq!(Ok(()), distributor.enable_interrupt(test.intid, test.param));
             assert_eq!(
                 test.expected_value,
                 regs.reg_read(test.offset),
@@ -1214,10 +1287,14 @@ mod tests {
         }
 
         let mut distributor = regs.distributor_for_test();
-        distributor.enable_interrupt(IntId::sgi(0), true);
-        distributor.enable_interrupt(IntId::sgi(1), true);
-        distributor.enable_interrupt(IntId::sgi(3), true);
-        distributor.enable_interrupt(IntId::sgi(3), false);
+        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(0), true));
+        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(1), true));
+        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(3), true));
+        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(3), false));
+        assert_eq!(
+            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
+            distributor.enable_interrupt(IntId::SPECIAL_NONSECURE, false)
+        );
         assert_eq!(0x0000_000b, regs.reg_read(0x0100));
         assert_eq!(0x0000_0008, regs.reg_read(0x0180));
     }
@@ -1350,7 +1427,7 @@ mod tests {
         // Save redistributor registers
         {
             let distributor = regs.distributor_for_test();
-            distributor.save(&mut context);
+            assert_eq!(Ok(()), distributor.save(&mut context));
         }
 
         // Create clean redistributor and restore registers
@@ -1361,7 +1438,7 @@ mod tests {
 
         {
             let mut distributor = regs.distributor_for_test();
-            distributor.restore(&context);
+            assert_eq!(Ok(()), distributor.restore(&context));
         }
 
         // Validate registers
@@ -1425,7 +1502,7 @@ mod tests {
         // Save redistributor registers
         {
             let distributor = regs.distributor_for_test();
-            distributor.save(&mut context);
+            assert_eq!(Ok(()), distributor.save(&mut context));
         }
 
         // Create clean redistributor and restore registers
@@ -1436,7 +1513,7 @@ mod tests {
 
         {
             let mut distributor = regs.distributor_for_test();
-            distributor.restore(&context);
+            assert_eq!(Ok(()), distributor.restore(&context));
         }
 
         // Validate registers
