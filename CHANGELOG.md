@@ -5,11 +5,11 @@
 ### Breaking changes
 
 - Use safe-mmio fields in Sgi and merge PPI registers.
-- Change `GicV3` getters to return component driver instances instead of raw register blocks.
+- Changed `GicV3` getters to return component driver instances instead of raw register blocks.
   - `GicV3::gicr_ptr()`, `GicV3::sgi_ptr()` -> `GicV3::redistributor()`
   - `GicV3::gicd_ptr()` -> `GicV3::distributor()`
-- Change CPU interface system register types.
-- Move CPU interface functions from `GicV3` into `GicCpuInterface`
+- Changed CPU interface system register types.
+- Moved CPU interface functions from `GicV3` into `GicCpuInterface`
   - `GicV3::enable_group0` -> `GicCpuInterface::enable_group0`
   - `GicV3::enable_group1` -> `GicCpuInterface::enable_group1`
   - `GicV3::end_interrupt` -> `GicCpuInterface::end_interrupt`
@@ -17,24 +17,31 @@
   - `GicV3::get_pending_interrupt` -> `GicCpuInterface::get_pending_interrupt`
   - `GicV3::send_sgi` -> `GicCpuInterface::send_sgi`
   - `GicV3::set_priority_mask` -> `GicCpuInterface::set_priority_mask`
-- Change the return value of `GicV2::enable_interrupt` from `Result<(), ()>` to `Result<(), Error>`
+- Changed the return value of `GicV2::enable_interrupt` from `Result<(), ()>` to `Result<(), Error>`
   to resolve `clippy::result_unit_err` warning.
-- Change function to return `Result<_, GicError>` instead of using `assert` or `unwrap` inside.
-- Merge `GICRError` into `GicError`.
+- Changed various `GicV3` methods to return `Result<_, GicError>` instead of using `assert` or `unwrap` inside.
+- Merged `GICRError` into `GicError`.
+- Changed types of `GicV3::new` parameters.
 
 ### Improvements
 
-- Split the implementation into separate Distributor, Redistributor and CPU interface components.
-- Implement `GicRedistributorIterator` for iterating over the GIC redistributor blocks.
-- Add `GicCpuInterface::get_priority_mask`
-- Add `GicV2::get_priority_mask`
+- Split the GICv3 implementation into separate Distributor, Redistributor and CPU interface
+  components. The combined `GicV3` driver remains as a simple option.
+- Implemented `GicRedistributorIterator` for iterating over the GIC redistributor blocks.
+- Added `GicCpuInterface::get_priority_mask`.
+- Added `GicV2::get_priority_mask`.
+- Added functionality to save and restore GICv3 distributor and redistributor state into new
+  `GicDistributorContext` and `GicRedistributorContext` structs.
+- Added unit tests for GICv3 components.
+- Added support for configuring extended interrupt IDs (ESPI, EPPI) on GICv3.
+- Added new methods to `IntId`: `is_eppi`, `is_espi`, `sgi_index`, `espi_index` and `private_index`.
 
 ## 0.6.1
 
 ### Organisational
 
-- Migrate the project under trustedfirmware.org governance
-- Switch to SPDX license identifiers
+- Migrated the project under trustedfirmware.org governance
+- Switched to SPDX license identifiers
 
 ## 0.6.0
 
