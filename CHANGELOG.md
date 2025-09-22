@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1
+
+### Bugfixes
+
+- Enabled affinity routing and Group 1 non-secure interrupts in
+  `GicDistributor::configure_default_settings`, ensuring `GicV3::setup` behaves consistently with
+  version 0.6.1.
+
 ## 0.7.0
 
 ### Breaking changes

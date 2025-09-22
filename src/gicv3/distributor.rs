@@ -294,6 +294,9 @@ impl<'a> GicDistributor<'a> {
         const G1NS_ALL: u32 = 0xffff_ffff;
         const LEVEL_SENSITIVE_ALL: u32 = 0x0000_0000;
 
+        self.enable_affinity_routing_secure(true);
+        self.enable_group1_non_secure(true);
+
         let spi_count = self.spi_count();
         let espi_count = self.espi_count();
 
