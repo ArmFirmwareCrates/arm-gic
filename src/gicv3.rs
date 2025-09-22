@@ -428,3 +428,293 @@ pub enum InterruptGroup {
     /// Interrupt group 1.
     Group1,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sysreg::{IccIgrpenEl1, IccSreEl1, fake::SYSREGS};
+    use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, transmute_mut};
+
+    #[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
+    #[repr(C, align(8))]
+    struct FakeRegisters {
+        regs: [u32; Self::REG_COUNT],
+    }
+
+    impl FakeRegisters {
+        // 64k block as an u32 array
+        const REG_COUNT: usize = 64 * 1024 / 4;
+
+        pub const fn new() -> Self {
+            Self {
+                regs: [0u32; Self::REG_COUNT],
+            }
+        }
+    }
+
+    struct FakeGic {
+        dist_regs: FakeRegisters,
+        redist_regs: [FakeRegisters; Self::CORE_COUNT * 2],
+    }
+
+    impl FakeGic {
+        const CORE_COUNT: usize = 4;
+
+        pub fn new() -> Self {
+            Self {
+                dist_regs: FakeRegisters::new(),
+                redist_regs: [const { FakeRegisters::new() }; Self::CORE_COUNT * 2],
+            }
+        }
+
+        pub fn dist_regs_write(&mut self, offset: usize, value: u32) {
+            self.dist_regs.regs[offset / 4] = value;
+        }
+
+        pub fn dist_reg_read(&self, offset: usize) -> u32 {
+            self.dist_regs.regs[offset / 4]
+        }
+
+        pub fn redist_regs_write(&mut self, cpu_index: usize, offset: usize, value: u32) {
+            self.redist_regs[cpu_index * 2].regs[offset / 4] = value;
+        }
+
+        pub fn sgi_reg_read(&self, cpu_index: usize, offset: usize) -> u32 {
+            self.redist_regs[cpu_index * 2 + 1].regs[offset / 4]
+        }
+
+        pub fn instance_for_test(&mut self) -> GicV3<'_> {
+            let gicd = UniqueMmioPointer::from(transmute_mut!(&mut self.dist_regs));
+            let gicr_base: &mut [GicrSgi; Self::CORE_COUNT] = transmute_mut!(&mut self.redist_regs);
+
+            // Safety: gicr_base points to the allocated register array.
+            unsafe {
+                GicV3::new(
+                    gicd,
+                    NonNull::new(gicr_base.as_mut_ptr()).unwrap(),
+                    Self::CORE_COUNT,
+                    false,
+                )
+            }
+        }
+    }
+
+    #[test]
+    fn setup() {
+        let mut regs = FakeGic::new();
+
+        // SPI count = 32
+        regs.dist_regs_write(0x0004, 0x0002);
+
+        {
+            let mut gic = regs.instance_for_test();
+
+            gic.setup(0);
+        }
+
+        for cpu_index in 0..FakeGic::CORE_COUNT {
+            let redist_expectations = [
+                (0x0080..=0x0080, 0xffff_ffff), // IGROUPR
+                (0x0180..=0x0180, 0xffff_ffff), // ICENABLER
+                (0x0400..=0x041c, 0x8080_8080), // IPRIORITYR
+                (0x0c00..=0x0c00, 0x0000_0000), // ICFGR
+            ];
+
+            for (range, value) in redist_expectations {
+                for offset in range {
+                    assert_eq!(
+                        value,
+                        regs.sgi_reg_read(cpu_index, offset),
+                        "offset {offset:#x}",
+                    );
+                }
+            }
+        }
+
+        let dist_expectation = [
+            (0x0000..=0x0000, 0x0000_0012), // CTLR
+            (0x0084..=0x0084, 0xffff_ffff), // IGROUPR
+            (0x0420..=0x043c, 0x8080_8080), // IPRIORITYR
+            (0x0c04..=0x0c04, 0x0000_0000), // ICFGR
+        ];
+
+        for (range, value) in dist_expectation {
+            for offset in range {
+                assert_eq!(value, regs.dist_reg_read(offset), "offset {offset:#x}",);
+            }
+        }
+
+        let sysregs = SYSREGS.lock().unwrap();
+        assert_eq!(0x0000_0000, sysregs.icc_ctlr_el1);
+        assert_eq!(IccSreEl1::SRE, sysregs.icc_sre_el1);
+        assert_eq!(IccIgrpenEl1::EN, sysregs.icc_igrpen1_el1);
+    }
+
+    #[test]
+    fn enable_all_interrupts() {
+        let mut regs = FakeGic::new();
+
+        // SPI count = 32
+        regs.dist_regs_write(0x0004, 0x0002);
+
+        {
+            let mut gic = regs.instance_for_test();
+
+            gic.enable_all_interrupts(true);
+        }
+
+        for cpu_index in 0..FakeGic::CORE_COUNT {
+            assert_eq!(0xffff_ffff, regs.sgi_reg_read(cpu_index, 0x0100));
+        }
+
+        assert_eq!(0xffff_ffff, regs.dist_reg_read(0x0104));
+    }
+
+    #[test]
+    fn enable_interrupt() {
+        let mut regs = FakeGic::new();
+
+        // SPI count = 32
+        regs.dist_regs_write(0x0004, 0x0002);
+
+        {
+            let mut gic = regs.instance_for_test();
+
+            assert_eq!(Ok(()), gic.enable_interrupt(IntId::ppi(0), Some(1), true));
+            assert_eq!(Ok(()), gic.enable_interrupt(IntId::spi(0), None, true));
+        }
+
+        assert_eq!(0x0001_0000, regs.sgi_reg_read(1, 0x0100));
+        assert_eq!(0x0000_0001, regs.dist_reg_read(0x0104));
+    }
+
+    #[test]
+    fn set_priority() {
+        let mut regs = FakeGic::new();
+
+        // SPI count = 32
+        regs.dist_regs_write(0x0004, 0x0002);
+
+        {
+            let mut gic = regs.instance_for_test();
+
+            assert_eq!(
+                Ok(()),
+                gic.set_interrupt_priority(IntId::ppi(0), Some(2), 0xab)
+            );
+            assert_eq!(
+                Ok(()),
+                gic.set_interrupt_priority(IntId::spi(0), None, 0xcd)
+            );
+        }
+
+        assert_eq!(0x0000_00ab, regs.sgi_reg_read(2, 0x0410));
+        assert_eq!(0x0000_00cd, regs.dist_reg_read(0x420));
+    }
+
+    #[test]
+    fn set_trigger() {
+        let mut regs = FakeGic::new();
+
+        // SPI count = 32
+        regs.dist_regs_write(0x0004, 0x0002);
+
+        {
+            let mut gic = regs.instance_for_test();
+
+            assert_eq!(
+                Ok(()),
+                gic.set_trigger(IntId::ppi(0), Some(2), Trigger::Edge)
+            );
+            assert_eq!(Ok(()), gic.set_trigger(IntId::spi(0), None, Trigger::Edge));
+        }
+
+        assert_eq!(0x0000_0002, regs.sgi_reg_read(2, 0x0c04));
+        assert_eq!(0x0000_0002, regs.dist_reg_read(0x0c08));
+    }
+
+    #[test]
+    fn set_group() {
+        let mut regs = FakeGic::new();
+
+        // SPI count = 32
+        regs.dist_regs_write(0x0004, 0x0002);
+
+        {
+            let mut gic = regs.instance_for_test();
+
+            assert_eq!(
+                Ok(()),
+                gic.set_group(IntId::ppi(0), Some(2), Group::Group1NS)
+            );
+            assert_eq!(
+                Ok(()),
+                gic.set_group(IntId::spi(0), None, Group::Secure(SecureIntGroup::Group1S))
+            );
+        }
+
+        assert_eq!(0x0001_0000, regs.sgi_reg_read(2, 0x0080));
+        assert_eq!(0x0000_0001, regs.dist_reg_read(0x0D04));
+    }
+
+    #[test]
+    fn typer() {
+        let mut regs = FakeGic::new();
+
+        regs.dist_regs_write(0x0004, 0x0000_0081);
+
+        let mut gic = regs.instance_for_test();
+
+        // This also checks whether the distributor can be borrowed with the correct lifetime.
+        let distributor = gic.distributor();
+        let typer = distributor.typer();
+        assert_eq!(32, typer.num_spis());
+        assert_eq!(4, typer.num_cpus());
+
+        let typer = gic.typer();
+
+        assert_eq!(32, typer.num_spis());
+        assert_eq!(4, typer.num_cpus());
+    }
+
+    #[test]
+    fn gicr_typer() {
+        let mut regs = FakeGic::new();
+
+        regs.redist_regs_write(3, 0x0008, 1 << 27);
+        regs.redist_regs_write(3, 0x000c, 0xabcd_ef12);
+
+        let mut gic = regs.instance_for_test();
+        let typer = gic.gicr_typer(3).unwrap();
+
+        assert_eq!(0x0000_00ab_00cd_ef12, typer.core_mpidr());
+        assert_eq!(32, typer.max_eppi_count());
+
+        let redist = gic.redistributor(3).unwrap();
+        let typer = redist.typer();
+
+        assert_eq!(0x0000_00ab_00cd_ef12, typer.core_mpidr());
+        assert_eq!(32, typer.max_eppi_count());
+
+        assert!(gic.redistributor(FakeGic::CORE_COUNT).is_err());
+    }
+
+    #[test]
+    fn gicd_control() {
+        let mut regs = FakeGic::new();
+
+        {
+            let mut gic = regs.instance_for_test();
+            gic.gicd_set_control(GicdCtlr::EnableGrp1NS | GicdCtlr::EnableGrp1S);
+        }
+
+        assert_eq!(0x0000_0006, regs.dist_reg_read(0x0000));
+
+        {
+            let mut gic = regs.instance_for_test();
+            gic.gicd_clear_control(GicdCtlr::EnableGrp1NS);
+        }
+
+        assert_eq!(0x0000_0004, regs.dist_reg_read(0x0000));
+    }
+}

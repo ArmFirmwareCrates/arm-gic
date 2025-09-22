@@ -9,6 +9,10 @@
   version 0.6.1.
 - Fixed the lifetime parameter of the return value from `GicV3::distributor()`.
 
+### Improvements
+
+- Added unit tests for `GicV3`.
+
 ## 0.7.0
 
 ### Breaking changes
