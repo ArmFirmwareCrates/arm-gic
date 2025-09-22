@@ -7,6 +7,7 @@
 - Enabled affinity routing and Group 1 non-secure interrupts in
   `GicDistributor::configure_default_settings`, ensuring `GicV3::setup` behaves consistently with
   version 0.6.1.
+- Fixed the lifetime parameter of the return value from `GicV3::distributor()`.
 
 ## 0.7.0
 

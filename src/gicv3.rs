@@ -303,7 +303,7 @@ impl<'a> GicV3<'a> {
     }
 
     /// Returns the distributor instance.
-    pub fn distributor(&mut self) -> &'a mut GicDistributor<'_> {
+    pub fn distributor(&mut self) -> &mut GicDistributor<'a> {
         &mut self.gicd
     }
 
