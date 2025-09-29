@@ -1,0 +1,13 @@
+[package]
+name = "gicv2"
+version = "0.1.0"
+authors = ["Manos Pitsidianakis <manos.pitsidianakis@linaro.org>"]
+edition = "2021"
+
+[dependencies]
+aarch64-rt = { version = "0.2.2", default-features = false, features = ["el1", "exceptions", "psci"] }
+arm-gic = { path = "../.." }
+log = "0.4.22"
+pl011-uart = "0.1.0"
+smccc = "0.1.1"
+spin = "0.9.8"
