@@ -54,9 +54,16 @@ impl GicV2<'_> {
 
     /// Initialises the GIC.
     pub fn setup(&mut self) {
-        field!(self.gicd, ctlr).write(GicdCtlr::EnableGrp1);
-        for i in 0..32 {
-            field!(self.gicd, igroupr).get(i).unwrap().write(0xffffffff);
+        if self.typer().has_security_extension() {
+            field!(self.gicd, ctlr).write(GicdCtlr::EnableGrp1);
+            for i in 0..32 {
+                field!(self.gicd, igroupr).get(i).unwrap().write(0xffffffff);
+            }
+        } else {
+            field!(self.gicd, ctlr).write(GicdCtlr::EnableGrp0);
+            for i in 0..32 {
+                field!(self.gicd, igroupr).get(i).unwrap().write(0x0);
+            }
         }
 
         field!(self.gicc, ctlr).write(0b1);
@@ -171,7 +178,11 @@ impl GicV2<'_> {
     ///
     /// Returns `None` if there is no ptending interrupt of sufficient priority.
     pub fn get_and_acknowledge_interrupt(&mut self) -> Option<IntId> {
-        let intid = IntId(field!(self.gicc, aiar).read());
+        let intid = if self.typer().has_security_extension() {
+            IntId(field!(self.gicc, aiar).read())
+        } else {
+            IntId(field!(self.gicc, iar).read())
+        };
         if intid == IntId::SPECIAL_NONE {
             None
         } else {
@@ -182,7 +193,11 @@ impl GicV2<'_> {
     /// Informs the interrupt controller that the CPU has completed processing the given interrupt.
     /// This drops the interrupt priority and deactivates the interrupt.
     pub fn end_interrupt(&mut self, intid: IntId) {
-        field!(self.gicc, aeoir).write(intid.0);
+        if self.typer().has_security_extension() {
+            field!(self.gicc, aeoir).write(intid.0);
+        } else {
+            field!(self.gicc, eoir).write(intid.0);
+        }
     }
 }
 

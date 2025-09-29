@@ -98,9 +98,9 @@ pub struct Gicc {
     /// Binary Point Register.
     pub bpr: u32,
     /// Interrupt Acknowledge Register.
-    pub iar: u32,
+    pub iar: ReadOnly<u32>,
     /// End of Interrupt Register.
-    pub eoir: u32,
+    pub eoir: WriteOnly<u32>,
     /// Running Priority Register.
     pub rpr: u32,
     /// Highest Priority Pending Interrupt Register.
