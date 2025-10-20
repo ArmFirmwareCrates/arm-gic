@@ -20,8 +20,14 @@
 
 ### Improvements
 
-- Improved Distributor and Redistributor `configure_default_settings()` performance
-- Added example use of `GicV2` with QEMU's `virt` machine under `examples/`
+- Improved Distributor and Redistributor `configure_default_settings()` performance.
+- Added example use of `GicV2` with QEMU's `virt` machine under `examples/`.
+- Made `IntId` `repr(transparent)` for easier use with FFI.
+- Implemented `TryFrom<u32>` for `IntId`.
+- Added `raw_value` method to `IntId`.
+- Derive zerocopy `FromZeros`, `Immutable`, `IntoBytes` and `KnownLayout` for `IntId`.
+- Added `IntId::MAX_LPI_COUNT`. `IntId::lpi` will now panic if given an LPI number greater than
+  this.
 
 ## 0.7.2
 
