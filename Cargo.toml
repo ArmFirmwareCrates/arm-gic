@@ -13,10 +13,10 @@ keywords = ["arm", "aarch64", "driver", "gic", "interrupt-controller"]
 categories = ["embedded", "no-std", "hardware-support"]
 
 [dependencies]
-bitflags = "2.10.0"
+bitflags = "2.11.0"
 safe-mmio = "0.3.0"
 thiserror = { version = "2.0.18", default-features = false }
-zerocopy = { version = "0.8.38", features = ["derive"] }
+zerocopy = { version = "0.8.42", features = ["derive"] }
 
 [features]
 fakes = []
