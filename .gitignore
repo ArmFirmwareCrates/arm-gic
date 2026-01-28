@@ -1,2 +1,5 @@
 /target
 /.vscode
+
+# Vim swap file
+*.swp
