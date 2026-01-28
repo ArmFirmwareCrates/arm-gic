@@ -426,16 +426,15 @@ impl<'a> GicDistributor<'a> {
         let irouter = mpidr.unwrap_or(INTERRUPT_ROUTING_MODE);
 
         // Cannot use select_regs! because irouter and irouter_e have different lengths.
-        if intid.0 < IntId::SPECIAL_START {
+        if let Some(spi_index) = intid.spi_index() {
             field!(self.regs, irouter)
-                .get(intid.0 as usize)
+                .get(spi_index)
                 .unwrap()
                 .write(irouter);
             Ok(())
-        } else if intid.is_espi() {
-            let index = intid.espi_index().unwrap();
+        } else if let Some(espi_index) = intid.espi_index() {
             field!(self.regs, irouter_e)
-                .get(index)
+                .get(espi_index)
                 .unwrap()
                 .write(irouter);
             Ok(())
@@ -1146,10 +1145,8 @@ mod tests {
     fn set_routing() {
         let mpidr = 0x0000_00ab_00cd_ef12u64;
         let tests = [
-            TestCase::new(IntId::sgi(0), 0x6100, mpidr, Some(mpidr)),
-            TestCase::new(IntId::sgi(15), 0x6178, 0x0000_0000_8000_0000, None),
-            TestCase::new(IntId::ppi(0), 0x6180, mpidr, Some(mpidr)),
-            TestCase::new(IntId::ppi(15), 0x61f8, 0x0000_0000_8000_0000, None),
+            TestCase::new(IntId::spi(0), 0x6100, mpidr, Some(mpidr)),
+            TestCase::new(IntId::spi(987), 0x7FD8, mpidr, Some(mpidr)),
             TestCase::new(IntId::espi(0), 0x8000, mpidr, Some(mpidr)),
             TestCase::new(IntId::espi(1023), 0x9ff8, 0x0000_0000_8000_0000, None),
         ];
@@ -1167,11 +1164,21 @@ mod tests {
             regs.clear();
         }
 
+        let invalid_int_ids = [
+            IntId::sgi(0),
+            IntId::sgi(15),
+            IntId::ppi(0),
+            IntId::ppi(15),
+            IntId::SPECIAL_NONSECURE,
+        ];
+
         let mut distributor = regs.distributor_for_test();
-        assert_eq!(
-            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
-            distributor.set_routing(IntId::SPECIAL_NONSECURE, None)
-        );
+        for int_id in invalid_int_ids {
+            assert_eq!(
+                Err(GicError::InvalidGicdIntid(int_id)),
+                distributor.set_routing(int_id, None)
+            );
+        }
     }
 
     #[test]

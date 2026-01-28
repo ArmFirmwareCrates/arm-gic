@@ -232,6 +232,15 @@ impl IntId {
         }
     }
 
+    /// Returns SPI index or `None` if it is not an SPI interrupt ID.
+    pub const fn spi_index(self) -> Option<usize> {
+        if self.is_spi() {
+            Some((self.0 - Self::SPI_START) as usize)
+        } else {
+            None
+        }
+    }
+
     /// Returns ESPI index or `None` if it is not an ESPI interrupt ID.
     pub const fn espi_index(self) -> Option<usize> {
         if self.is_espi() {
