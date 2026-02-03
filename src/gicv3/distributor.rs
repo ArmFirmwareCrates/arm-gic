@@ -422,8 +422,11 @@ impl<'a> GicDistributor<'a> {
     /// If `mpidr` is `None`, interrupts are routed to any PE defined as a participating node.
     pub fn set_routing(&mut self, intid: IntId, mpidr: Option<u64>) -> Result<(), GicError> {
         const INTERRUPT_ROUTING_MODE: u64 = 1 << 31;
+        const IROUTER_MASK: u64 = 0x000000FF_80FFFFFF;
 
-        let irouter = mpidr.unwrap_or(INTERRUPT_ROUTING_MODE);
+        let irouter = mpidr
+            .map(|mpidr| mpidr & IROUTER_MASK)
+            .unwrap_or(INTERRUPT_ROUTING_MODE);
 
         // Cannot use select_regs! because irouter and irouter_e have different lengths.
         if let Some(spi_index) = intid.spi_index() {
