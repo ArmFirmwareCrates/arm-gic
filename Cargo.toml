@@ -1,6 +1,6 @@
 [package]
 name = "arm-gic"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A driver for the Arm Generic Interrupt Controller version 2, 3 or 4."
@@ -13,10 +13,10 @@ keywords = ["arm", "aarch64", "driver", "gic", "interrupt-controller"]
 categories = ["embedded", "no-std", "hardware-support"]
 
 [dependencies]
-bitflags = "2.9.1"
-safe-mmio = "0.2.5"
-thiserror = { version = "2.0.14", default-features = false }
-zerocopy = { version = "0.8.26", features = ["derive"] }
+bitflags = "2.10.0"
+safe-mmio = "0.2.7"
+thiserror = { version = "2.0.18", default-features = false }
+zerocopy = { version = "0.8.38", features = ["derive"] }
 
 [features]
 fakes = []

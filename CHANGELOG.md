@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.2
+
+### Bugfixes
+
+- Fixed bug with `Distributor:::set_routing` using the wrong index for SPIs. It will now return an
+  error for PPIs and SGIs.
+
+### Improvements
+
+- Added `IntId::spi_index` method.
+
 ## 0.7.1
 
 ### Bugfixes
