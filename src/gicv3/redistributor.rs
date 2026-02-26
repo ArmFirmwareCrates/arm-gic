@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use core::{hint::spin_loop, marker::PhantomData, ops::Range, ptr::NonNull, stringify};
-use safe_mmio::{UniqueMmioPointer, field, field_shared};
+use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};
 use zerocopy::{transmute_mut, transmute_ref};
 
 /// Reads a GICR register and stores it in a context structure.
@@ -274,12 +274,35 @@ impl<'a> GicRedistributor<'a> {
         );
 
         // Setup the default (E)PPI/SGI priorities
-        set_regs(
-            field!(sgi, ipriorityr),
-            0,
-            ppi_count,
-            Sgi::IPRIORITY_BITS,
+
+        // For performance reasons this array of registers is initialized as words, so four
+        // priority values can be set in one iteration.
+        let mut ipriorityr_bytes = field!(sgi, ipriorityr);
+
+        // Safety: ipriorityr_bytes is a valid pointer to the ipriority register array. Section
+        // 12.1.3 GIC memory-mapped register access of the GIC specificition describes that
+        // GICR_IPRIORITYR supports both 8-bit and 32-bit accesses.
+        let ipriority_words = unsafe {
+            UniqueMmioPointer::new(
+                ipriorityr_bytes
+                    .ptr_nonnull()
+                    .cast::<[ReadPureWrite<u32>; 96 / 4]>(),
+            )
+        };
+
+        let ipriority_word_value = u32::from_le_bytes([
             HIGHEST_NS_PRIORITY,
+            HIGHEST_NS_PRIORITY,
+            HIGHEST_NS_PRIORITY,
+            HIGHEST_NS_PRIORITY,
+        ]);
+
+        set_regs(
+            ipriority_words.into(),
+            0,
+            ppi_count / 4,
+            Sgi::IPRIORITY_BITS * 4,
+            ipriority_word_value,
         );
 
         // Configure all (E)PPIs as level triggered by default

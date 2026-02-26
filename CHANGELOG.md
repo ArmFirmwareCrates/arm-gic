@@ -1,5 +1,11 @@
 # Changelog
 
+## Future
+
+### Improvements
+
+- Improved Distributor and Redistributor `configure_default_settings()` performance
+
 ## 0.7.2
 
 ### Bugfixes
