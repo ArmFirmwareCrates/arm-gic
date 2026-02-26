@@ -101,8 +101,9 @@ fn set_regs<T, const N: usize>(
 {
     let reg_start = register_count(start_offset, bits_per_int, &value);
     let reg_end = register_count(start_offset + int_count, bits_per_int, &value);
-    for i in reg_start..reg_end {
-        regs.get(i).unwrap().write(value);
+
+    for mut reg in regs.get_range(reg_start..reg_end).unwrap() {
+        reg.write(value);
     }
 }
 
