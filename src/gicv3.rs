@@ -48,7 +48,11 @@ pub const HIGHEST_S_PRIORITY: u8 = 0x00;
 pub const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
 /// Modifies `nth` bit of memory pointed by `registers`.
-fn modify_bit(mut registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize, set_bit: bool) {
+fn modify_bit<const N: usize>(
+    mut registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>,
+    nth: usize,
+    set_bit: bool,
+) {
     let reg_num: usize = nth / 32;
 
     let bit_num: usize = nth % 32;
@@ -67,12 +71,12 @@ fn modify_bit(mut registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize
 }
 
 /// Sets `nth` bit of memory pointed by `registers`.
-fn set_bit(registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize) {
+fn set_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
     modify_bit(registers, nth, true);
 }
 
 /// Clears `nth` bit of memory pointed by `registers`.
-fn clear_bit(registers: UniqueMmioPointer<[ReadPureWrite<u32>]>, nth: usize) {
+fn clear_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
     modify_bit(registers, nth, false);
 }
 
@@ -86,8 +90,8 @@ const fn register_count<T: ?Sized>(int_count: usize, bits_per_int: usize, field:
 ///
 /// The function iterates over a range of `regs` and writes `value` into each register. The range is
 /// determined based on `start_offset`, `int_count`, `bits_per_int` and the type of the registers.
-fn set_regs<T>(
-    mut regs: UniqueMmioPointer<[ReadPureWrite<T>]>,
+fn set_regs<T, const N: usize>(
+    mut regs: UniqueMmioPointer<[ReadPureWrite<T>; N]>,
     start_offset: usize,
     int_count: usize,
     bits_per_int: usize,

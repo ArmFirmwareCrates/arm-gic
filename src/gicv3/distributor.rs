@@ -342,7 +342,7 @@ impl<'a> GicDistributor<'a> {
         };
 
         set_regs(
-            ipriority_words.into(),
+            ipriority_words,
             SPI_START / 4,
             spi_count / 4,
             Gicd::IPRIORITY_BITS * 4,
@@ -363,7 +363,7 @@ impl<'a> GicDistributor<'a> {
         };
 
         set_regs(
-            ipriority_e_words.into(),
+            ipriority_e_words,
             0,
             espi_count / 4,
             Gicd::IPRIORITY_BITS * 4,
@@ -447,8 +447,8 @@ impl<'a> GicDistributor<'a> {
         let bit_index = index * Gicd::ICFGR_BITS + 1;
 
         match trigger {
-            Trigger::Edge => set_bit(registers.into(), bit_index),
-            Trigger::Level => clear_bit(registers.into(), bit_index),
+            Trigger::Edge => set_bit(registers, bit_index),
+            Trigger::Level => clear_bit(registers, bit_index),
         };
 
         Ok(())
@@ -486,19 +486,19 @@ impl<'a> GicDistributor<'a> {
     pub fn set_group(&mut self, intid: IntId, group: Group) -> Result<(), GicError> {
         if let Group::Secure(sg) = group {
             let (igroupr, index) = select_regs!(self.regs, igroupr, igroupr_e, intid)?;
-            clear_bit(igroupr.into(), index);
+            clear_bit(igroupr, index);
 
             let (igrpmodr, index) = select_regs!(self.regs, igrpmodr, igrpmodr_e, intid)?;
             match sg {
-                SecureIntGroup::Group1S => set_bit(igrpmodr.into(), index),
-                SecureIntGroup::Group0 => clear_bit(igrpmodr.into(), index),
+                SecureIntGroup::Group1S => set_bit(igrpmodr, index),
+                SecureIntGroup::Group0 => clear_bit(igrpmodr, index),
             }
         } else {
             let (igroupr, index) = select_regs!(self.regs, igroupr, igroupr_e, intid)?;
-            set_bit(igroupr.into(), index);
+            set_bit(igroupr, index);
 
             let (igrpmodr, index) = select_regs!(self.regs, igrpmodr, igrpmodr_e, intid)?;
-            clear_bit(igrpmodr.into(), index);
+            clear_bit(igrpmodr, index);
         }
 
         Ok(())
@@ -508,10 +508,10 @@ impl<'a> GicDistributor<'a> {
     pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) -> Result<(), GicError> {
         if enable {
             let (registers, index) = select_regs!(self.regs, isenabler, isenabler_e, intid)?;
-            set_bit(registers.into(), index);
+            set_bit(registers, index);
         } else {
             let (registers, index) = select_regs!(self.regs, icenabler, icenabler_e, intid)?;
-            set_bit(registers.into(), index);
+            set_bit(registers, index);
         }
 
         Ok(())

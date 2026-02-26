@@ -298,7 +298,7 @@ impl<'a> GicRedistributor<'a> {
         ]);
 
         set_regs(
-            ipriority_words.into(),
+            ipriority_words,
             0,
             ppi_count / 4,
             Sgi::IPRIORITY_BITS * 4,
@@ -354,15 +354,15 @@ impl<'a> GicRedistributor<'a> {
 
         let mut sgi = field!(self.regs, sgi);
         if let Group::Secure(sg) = group {
-            clear_bit(field!(sgi, igroupr).into(), index);
-            let igrpmodr = field!(sgi, igrpmodr).into();
+            clear_bit(field!(sgi, igroupr), index);
+            let igrpmodr = field!(sgi, igrpmodr);
             match sg {
                 SecureIntGroup::Group1S => set_bit(igrpmodr, index),
                 SecureIntGroup::Group0 => clear_bit(igrpmodr, index),
             }
         } else {
-            set_bit(field!(sgi, igroupr).into(), index);
-            clear_bit(field!(sgi, igrpmodr).into(), index);
+            set_bit(field!(sgi, igroupr), index);
+            clear_bit(field!(sgi, igrpmodr), index);
         }
 
         Ok(())
@@ -376,9 +376,9 @@ impl<'a> GicRedistributor<'a> {
         let mut sgi = field!(self.regs, sgi);
 
         if enable {
-            set_bit(field!(sgi, isenabler).into(), index);
+            set_bit(field!(sgi, isenabler), index);
         } else {
-            set_bit(field!(sgi, icenabler).into(), index);
+            set_bit(field!(sgi, icenabler), index);
         }
 
         Ok(())
