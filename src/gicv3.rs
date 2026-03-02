@@ -59,15 +59,14 @@ fn modify_bit<const N: usize>(
     let bit_mask: u32 = 1 << bit_num;
 
     let mut reg_ptr = registers.get(reg_num).unwrap();
-    let old_value = reg_ptr.read();
 
-    let new_value: u32 = if set_bit {
-        old_value | bit_mask
-    } else {
-        old_value & !bit_mask
-    };
-
-    reg_ptr.write(new_value);
+    reg_ptr.modify(|old_value| {
+        if set_bit {
+            old_value | bit_mask
+        } else {
+            old_value & !bit_mask
+        }
+    });
 }
 
 /// Sets `nth` bit of memory pointed by `registers`.

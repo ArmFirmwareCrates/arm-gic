@@ -337,8 +337,8 @@ impl<'a> GicRedistributor<'a> {
         let mut sgi = field!(self.regs, sgi);
         let mut icfgr = field!(sgi, icfgr);
         let mut register = icfgr.get(reg_index).unwrap();
-        let v = register.read();
-        register.write(match trigger {
+
+        register.modify(|v| match trigger {
             Trigger::Edge => v | bit,
             Trigger::Level => v & !bit,
         });

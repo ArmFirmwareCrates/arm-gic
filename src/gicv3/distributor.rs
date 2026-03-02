@@ -422,9 +422,7 @@ impl<'a> GicDistributor<'a> {
 
     /// Sets or clear bits in the control register.
     pub fn modify_control(&mut self, bits: GicdCtlr, enable: bool) {
-        let mut gicd_ctlr = field_shared!(self.regs, ctlr).read();
-        gicd_ctlr.set(bits, enable);
-        field!(self.regs, ctlr).write(gicd_ctlr);
+        field!(self.regs, ctlr).modify_mut(|v| v.set(bits, enable));
 
         self.wait_for_pending_write();
     }
