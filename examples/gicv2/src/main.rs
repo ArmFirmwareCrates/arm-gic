@@ -12,7 +12,7 @@ use arm_gic::{
         registers::{Gicc, Gicd},
         GicV2,
     },
-    irq_enable, wfi, IntId,
+    irq_enable, wfi, IntId, InterruptGroup,
 };
 use arm_pl011_uart::Uart;
 use core::{
@@ -123,8 +123,10 @@ impl ExceptionHandlers for Exceptions {
     extern "C" fn irq_current(_: RegisterStateRef) {
         let mut gic = GIC.get().unwrap().lock();
 
-        let int_id = gic.get_and_acknowledge_interrupt().unwrap();
-        gic.end_interrupt(int_id);
+        let int_id = gic
+            .get_and_acknowledge_interrupt(InterruptGroup::Group0)
+            .unwrap();
+        gic.end_interrupt(int_id, InterruptGroup::Group0);
         if int_id == TIMER_IRQID {
             let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
             if counter < 4 {
@@ -188,6 +190,8 @@ fn main(_x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
         gic.setup();
         gic.set_priority_mask(0xff);
 
+        gic.enable_group0(true);
+        gic.set_group(TIMER_IRQID, InterruptGroup::Group0);
         gic.enable_interrupt(TIMER_IRQID, true).unwrap();
         gic.set_interrupt_priority(TIMER_IRQID, 0);
         gic.set_trigger(TIMER_IRQID, arm_gic::Trigger::Level);

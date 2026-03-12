@@ -2,6 +2,15 @@
 
 ## Future
 
+### Breaking changes
+
+- `InterruptGroup` has been moved from `gicv3` module to crate root
+- Added `InterruptGroup` argument to `GicV2::get_and_acknowledge_interrupt` and `GicV2::end_interrupt` methods
+- Added methods for configuring groups:
+  - `GicV2::enable_group0`
+  - `GicV2::enable_group1`
+  - `GicV2::set_group` for changing a single interrupt's group
+
 ### Improvements
 
 - Improved Distributor and Redistributor `configure_default_settings()` performance

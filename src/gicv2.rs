@@ -7,7 +7,7 @@ pub mod registers;
 
 pub use self::registers::Typer;
 use self::registers::{Gicc, Gicd, GicdCtlr};
-use crate::{IntId, Trigger};
+use crate::{IntId, InterruptGroup, Trigger, modify_bit};
 use core::ptr::NonNull;
 use safe_mmio::{UniqueMmioPointer, field, field_shared};
 use thiserror::Error;
@@ -52,15 +52,33 @@ impl GicV2<'_> {
         field_shared!(self.gicd, typer).read()
     }
 
+    /// Enables or disables Group 0 interrupts.
+    pub fn enable_group0(&mut self, enable: bool) {
+        self.modify_control(GicdCtlr::EnableGrp0, enable);
+    }
+
+    /// Enables or disables Group 1 interrupts.
+    pub fn enable_group1(&mut self, enable: bool) {
+        self.modify_control(GicdCtlr::EnableGrp1, enable);
+    }
+
+    /// Sets or clear bits in the control register.
+    fn modify_control(&mut self, bits: GicdCtlr, enable: bool) {
+        field!(self.gicd, ctlr).modify_mut(|v| v.set(bits, enable));
+    }
+
     /// Initialises the GIC.
+    ///
+    /// If the GIC supports Security Extensions, it enables Group 1 interrupts,
+    /// otherwise Group 0.
     pub fn setup(&mut self) {
         if self.typer().has_security_extension() {
-            field!(self.gicd, ctlr).write(GicdCtlr::EnableGrp1);
+            self.enable_group1(true);
             for i in 0..32 {
                 field!(self.gicd, igroupr).get(i).unwrap().write(0xffffffff);
             }
         } else {
-            field!(self.gicd, ctlr).write(GicdCtlr::EnableGrp0);
+            self.enable_group0(true);
             for i in 0..32 {
                 field!(self.gicd, igroupr).get(i).unwrap().write(0x0);
             }
@@ -68,6 +86,15 @@ impl GicV2<'_> {
 
         field!(self.gicc, ctlr).write(0b1);
         field!(self.gicc, pmr).write(0xff);
+    }
+
+    /// Assigns the interrupt with id `intid` to interrupt group `group`.
+    pub fn set_group(&mut self, intid: IntId, group: InterruptGroup) {
+        modify_bit(
+            field!(self.gicd, igroupr),
+            intid.0 as usize,
+            matches!(group, InterruptGroup::Group1),
+        );
     }
 
     /// Enables or disables the interrupt with the given ID.
@@ -177,11 +204,10 @@ impl GicV2<'_> {
     /// Gets the ID of the highest priority signalled interrupt, and acknowledges it.
     ///
     /// Returns `None` if there is no ptending interrupt of sufficient priority.
-    pub fn get_and_acknowledge_interrupt(&mut self) -> Option<IntId> {
-        let intid = if self.typer().has_security_extension() {
-            IntId(field!(self.gicc, aiar).read())
-        } else {
-            IntId(field!(self.gicc, iar).read())
+    pub fn get_and_acknowledge_interrupt(&mut self, group: InterruptGroup) -> Option<IntId> {
+        let intid = match group {
+            InterruptGroup::Group0 => IntId(field!(self.gicc, iar).read()),
+            InterruptGroup::Group1 => IntId(field!(self.gicc, aiar).read()),
         };
         if intid == IntId::SPECIAL_NONE {
             None
@@ -192,11 +218,10 @@ impl GicV2<'_> {
 
     /// Informs the interrupt controller that the CPU has completed processing the given interrupt.
     /// This drops the interrupt priority and deactivates the interrupt.
-    pub fn end_interrupt(&mut self, intid: IntId) {
-        if self.typer().has_security_extension() {
-            field!(self.gicc, aeoir).write(intid.0);
-        } else {
-            field!(self.gicc, eoir).write(intid.0);
+    pub fn end_interrupt(&mut self, intid: IntId, group: InterruptGroup) {
+        match group {
+            InterruptGroup::Group0 => field!(self.gicc, eoir).write(intid.0),
+            InterruptGroup::Group1 => field!(self.gicc, aeoir).write(intid.0),
         }
     }
 }

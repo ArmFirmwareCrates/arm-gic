@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::{
-    IntId, Trigger,
+    IntId, Trigger, clear_bit,
     gicv3::{
-        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, clear_bit, register_count,
+        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, register_count,
         registers::{GicrCtlr, GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Sgi, Waker},
-        set_bit, set_regs,
+        set_regs,
     },
+    set_bit,
 };
 use core::{hint::spin_loop, marker::PhantomData, ops::Range, ptr::NonNull, stringify};
 use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};

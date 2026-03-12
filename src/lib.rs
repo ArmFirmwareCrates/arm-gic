@@ -61,6 +61,7 @@ pub mod gicv3;
 mod sysreg;
 
 pub use safe_mmio::UniqueMmioPointer;
+use safe_mmio::fields::ReadPureWrite;
 
 #[cfg(feature = "fakes")]
 pub use sysreg::fake as sysreg_fake;
@@ -78,6 +79,17 @@ pub enum Trigger {
     Edge,
     /// The interrupt is level triggered.
     Level,
+}
+
+/// An interrupt group, without distinguishing between secure and non-secure.
+///
+/// This is used to select which group of interrupts to get, acknowledge and end.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum InterruptGroup {
+    /// Interrupt group 0.
+    Group0,
+    /// Interrupt group 1.
+    Group1,
 }
 
 /// An interrupt ID.
@@ -323,4 +335,36 @@ pub fn wfi() {
     unsafe {
         asm!("wfi", options(nomem, nostack));
     }
+}
+
+/// Modifies `nth` bit of memory pointed by `registers`.
+fn modify_bit<const N: usize>(
+    mut registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>,
+    nth: usize,
+    set_bit: bool,
+) {
+    let reg_num: usize = nth / 32;
+
+    let bit_num: usize = nth % 32;
+    let bit_mask: u32 = 1 << bit_num;
+
+    let mut reg_ptr = registers.get(reg_num).unwrap();
+
+    reg_ptr.modify(|old_value| {
+        if set_bit {
+            old_value | bit_mask
+        } else {
+            old_value & !bit_mask
+        }
+    });
+}
+
+/// Sets `nth` bit of memory pointed by `registers`.
+fn set_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
+    modify_bit(registers, nth, true);
+}
+
+/// Clears `nth` bit of memory pointed by `registers`.
+fn clear_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
+    modify_bit(registers, nth, false);
 }

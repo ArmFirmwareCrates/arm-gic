@@ -47,38 +47,6 @@ pub const HIGHEST_S_PRIORITY: u8 = 0x00;
 /// Highest priority value of Non-secure Group 1 interrupts.
 pub const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
-/// Modifies `nth` bit of memory pointed by `registers`.
-fn modify_bit<const N: usize>(
-    mut registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>,
-    nth: usize,
-    set_bit: bool,
-) {
-    let reg_num: usize = nth / 32;
-
-    let bit_num: usize = nth % 32;
-    let bit_mask: u32 = 1 << bit_num;
-
-    let mut reg_ptr = registers.get(reg_num).unwrap();
-
-    reg_ptr.modify(|old_value| {
-        if set_bit {
-            old_value | bit_mask
-        } else {
-            old_value & !bit_mask
-        }
-    });
-}
-
-/// Sets `nth` bit of memory pointed by `registers`.
-fn set_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
-    modify_bit(registers, nth, true);
-}
-
-/// Clears `nth` bit of memory pointed by `registers`.
-fn clear_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
-    modify_bit(registers, nth, false);
-}
-
 /// Calculates the register count based on the interrupt count, bits used in the register per
 /// interrupt and the field's type.
 const fn register_count<T: ?Sized>(int_count: usize, bits_per_int: usize, field: &T) -> usize {
@@ -420,17 +388,6 @@ pub enum SgiTargetGroup {
     CurrentGroup1,
     /// The SGI is routed to the other security state Group 1.
     OtherGroup1,
-}
-
-/// An interrupt group, without distinguishing between secure and non-secure.
-///
-/// This is used to select which group of interrupts to get, acknowledge and end.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum InterruptGroup {
-    /// Interrupt group 0.
-    Group0,
-    /// Interrupt group 1.
-    Group1,
 }
 
 #[cfg(test)]

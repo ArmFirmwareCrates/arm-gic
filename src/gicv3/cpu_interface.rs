@@ -1,8 +1,6 @@
 // Copyright The arm-gic Authors.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
-use crate::gicv3::{InterruptGroup, SgiTarget, SgiTargetGroup};
 use crate::{
     IntId,
     gicv3::GicError,
@@ -14,6 +12,11 @@ use crate::{
         write_icc_igrpen1_el1, write_icc_igrpen1_el3, write_icc_pmr_el1, write_icc_sgi0r_el1,
         write_icc_sgi1r_el1, write_icc_sre_el1, write_icc_sre_el2, write_icc_sre_el3,
     },
+};
+#[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
+use crate::{
+    InterruptGroup,
+    gicv3::{SgiTarget, SgiTargetGroup},
 };
 
 /// GIC CPU interface driver implementation.
