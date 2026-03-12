@@ -14,6 +14,7 @@
 ### Improvements
 
 - Improved Distributor and Redistributor `configure_default_settings()` performance
+- Added example use of `GicV2` with QEMU's `virt` machine under `examples/`
 
 ## 0.7.2
 
