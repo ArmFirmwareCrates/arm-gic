@@ -73,8 +73,9 @@ impl EL1PhysicalTimer {
         unsafe {
             // SAFETY: this only accesses timer system registers
             asm!(
-                // Set timer in one second into the future.
+                // Set timer in a quarter of a second into the future.
                 "mrs {tmp}, CNTFRQ_EL0",
+                "lsr {tmp}, {tmp}, 2",
                 "msr CNTP_TVAL_EL0, {tmp}",
                 // Enable timer
                 "mrs {tmp}, CNTP_CTL_EL0",
