@@ -6,7 +6,7 @@
 
 mod exceptions;
 
-use aarch64_rt::entry;
+use aarch64_rt::{entry, exception_handlers, ExceptionHandlers, RegisterStateRef};
 use arm_gic::{
     gicv2::{
         registers::{Gicc, Gicd},
@@ -14,14 +14,15 @@ use arm_gic::{
     },
     irq_enable, IntId,
 };
+use arm_pl011_uart::Uart;
 use core::{
     arch::asm,
     fmt::Write,
     panic::PanicInfo,
+    ptr::NonNull,
     sync::atomic::{AtomicU8, Ordering},
 };
 use log::{LevelFilter, Log, Metadata, Record};
-use pl011_uart::Uart;
 use smccc::{psci::system_off, Hvc};
 use spin::{mutex::SpinMutex, Once};
 
@@ -44,7 +45,7 @@ static LOGGER: Logger = Logger {
 };
 
 struct Logger {
-    uart: SpinMutex<Option<Uart>>,
+    uart: SpinMutex<Option<Uart<'static>>>,
 }
 
 impl Log for Logger {
@@ -115,36 +116,53 @@ impl EL1PhysicalTimer {
     }
 }
 
-#[no_mangle]
-extern "C" fn irq_current(_elr: u64, _spsr: u64) {
-    let mut gic = GIC.get().unwrap().lock();
+struct Exceptions;
 
-    let int_id = gic.get_and_acknowledge_interrupt().unwrap();
-    gic.end_interrupt(int_id);
-    if int_id == TIMER_IRQID {
-        let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-        if counter < 4 {
-            log::info!("tick");
-            // Re-enable
-            EL1PhysicalTimer::enable();
+impl ExceptionHandlers for Exceptions {
+    extern "C" fn irq_current(_: RegisterStateRef) {
+        let mut gic = GIC.get().unwrap().lock();
+
+        let int_id = gic.get_and_acknowledge_interrupt().unwrap();
+        gic.end_interrupt(int_id);
+        if int_id == TIMER_IRQID {
+            let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
+            if counter < 4 {
+                log::info!("tick");
+                // Re-enable
+                EL1PhysicalTimer::enable();
+            } else {
+                // Mask interrupt and disable timer
+                EL1PhysicalTimer::disable();
+            }
         } else {
-            // Mask interrupt and disable timer
-            EL1PhysicalTimer::disable();
+            log::error!("unexpected int_id: {int_id:?}");
         }
-        return;
-    } else {
-        log::error!("unexpected int_id: {int_id:?}");
     }
 }
 
+exception_handlers!(Exceptions);
 entry!(main);
 fn main(_x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
     // Initialise logger uart
     {
+        use arm_pl011_uart::{DataBits, LineConfig, Parity, StopBits, UniqueMmioPointer};
+
         // SAFETY: BASE_ADDRESS is the base of the MMIO region for a UART and is mapped as device
         // memory.
-        let mut uart = unsafe { Uart::new(UART_BASE_ADDRESS) };
-        uart.init(50000000, 115200);
+        let uart_pointer =
+            unsafe { UniqueMmioPointer::new(NonNull::new(UART_BASE_ADDRESS.cast()).unwrap()) };
+
+        let mut uart = Uart::new(uart_pointer);
+        uart.enable(
+            LineConfig {
+                data_bits: DataBits::Bits8,
+                parity: Parity::None,
+                stop_bits: StopBits::One,
+            },
+            115_200,
+            50_000_000,
+        )
+        .unwrap();
         LOGGER.uart.lock().replace(uart);
 
         log::set_logger(&LOGGER).unwrap();
