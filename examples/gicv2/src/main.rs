@@ -12,7 +12,7 @@ use arm_gic::{
         registers::{Gicc, Gicd},
         GicV2,
     },
-    irq_enable, IntId,
+    irq_enable, wfi, IntId,
 };
 use arm_pl011_uart::Uart;
 use core::{
@@ -202,10 +202,7 @@ fn main(_x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
 
     // Wait for interrupt instead of busy-polling on COUNTER, it's simpler
     for _ in 0..5 {
-        // SAFETY: This doesn't access any memory or registers.
-        unsafe {
-            asm!("wfi", options(nomem, nostack));
-        }
+        wfi();
     }
 
     let counter = COUNTER.load(Ordering::SeqCst);
