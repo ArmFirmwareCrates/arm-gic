@@ -10,7 +10,7 @@ mod redistributor;
 pub mod registers;
 
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
-use crate::sysreg::write_icc_ctlr_el1;
+use crate::sysreg::{IccCtlrEl1, write_icc_ctlr_el1};
 use crate::{IntId, Trigger};
 use core::ptr::NonNull;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
@@ -153,7 +153,7 @@ impl<'a> GicV3<'a> {
     #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
     pub fn init_cpu(&mut self, cpu: usize) {
         // Enable system register access.
-        GicCpuInterface::enable_system_register_el1(true);
+        GicCpuInterface::enable_system_register_el1();
 
         // Ignore error in case core is already awake.
         let _ = self.redistributor_mark_core_awake(cpu);
@@ -161,7 +161,7 @@ impl<'a> GicV3<'a> {
         // Disable use of `ICC_PMR_EL1` as a hint for interrupt distribution, configure a write to
         // an EOI register to also deactivate the interrupt, and configure preemption groups for
         // group 0 and group 1 interrupts separately.
-        write_icc_ctlr_el1(0);
+        write_icc_ctlr_el1(IccCtlrEl1::empty());
     }
 
     /// Initialises the GIC and marks the given CPU core as awake.
@@ -393,7 +393,8 @@ pub enum SgiTargetGroup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sysreg::{IccIgrpenEl1, IccSreEl1, fake::SYSREGS};
+    use crate::sysreg::{IccIgrpen1El1, IccSreEl1};
+    use arm_sysregs::fake::SYSREGS;
     use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, transmute_mut};
 
     #[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
@@ -506,9 +507,9 @@ mod tests {
         }
 
         let sysregs = SYSREGS.lock().unwrap();
-        assert_eq!(0x0000_0000, sysregs.icc_ctlr_el1);
+        assert_eq!(IccCtlrEl1::empty(), sysregs.icc_ctlr_el1);
         assert_eq!(IccSreEl1::SRE, sysregs.icc_sre_el1);
-        assert_eq!(IccIgrpenEl1::EN, sysregs.icc_igrpen1_el1);
+        assert_eq!(IccIgrpen1El1::ENABLE, sysregs.icc_igrpen1_el1);
     }
 
     #[test]

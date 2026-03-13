@@ -10,6 +10,11 @@
   - `GicV2::enable_group0`
   - `GicV2::enable_group1`
   - `GicV2::set_group` for changing a single interrupt's group
+- Removed parameter from `GicCpuInterface::enable_system_register_el1`. Calling this function will
+  always enable system register access. Disabling system register access has unpredictable results
+  so is not supported. Removed the `enable` parameter from
+  `GicCpuInterface::enable_system_register_el2` and `GicCpuInterface::enable_system_register_el3`
+  for the same reason.
 
 ### Improvements
 

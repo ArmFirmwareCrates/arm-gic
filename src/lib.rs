@@ -63,11 +63,6 @@ mod sysreg;
 pub use safe_mmio::UniqueMmioPointer;
 use safe_mmio::fields::ReadPureWrite;
 
-#[cfg(feature = "fakes")]
-pub use sysreg::fake as sysreg_fake;
-#[cfg(feature = "fakes")]
-pub use sysreg::fake::{irq_disable, irq_enable, wfi};
-
 #[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
 use core::arch::asm;
 use core::fmt::{Debug, Formatter, Result};
@@ -319,6 +314,10 @@ pub fn irq_disable() {
     }
 }
 
+/// Disables debug, SError, IRQ and FIQ exceptions.
+#[cfg(any(test, feature = "fakes"))]
+pub fn irq_disable() {}
+
 /// Enables debug, SError, IRQ and FIQ exceptions.
 #[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
 pub fn irq_enable() {
@@ -328,6 +327,10 @@ pub fn irq_enable() {
     }
 }
 
+/// Enables debug, SError, IRQ and FIQ exceptions.
+#[cfg(any(test, feature = "fakes"))]
+pub fn irq_enable() {}
+
 /// Waits for an interrupt.
 #[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
 pub fn wfi() {
@@ -335,6 +338,12 @@ pub fn wfi() {
     unsafe {
         asm!("wfi", options(nomem, nostack));
     }
+}
+
+/// Waits for an interrupt.
+#[cfg(any(test, feature = "fakes"))]
+pub fn wfi() {
+    // No-op, just return immediately.
 }
 
 /// Modifies `nth` bit of memory pointed by `registers`.

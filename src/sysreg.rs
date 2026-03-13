@@ -1,119 +1,37 @@
 // Copyright 2023 The arm-gic Authors.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[cfg(any(test, feature = "fakes"))]
-#[macro_use]
-pub mod fake;
-
-#[cfg(all(not(any(test, feature = "fakes")), target_arch = "aarch64"))]
-#[macro_use]
-mod aarch64;
-
-#[cfg(all(not(any(test, feature = "fakes")), target_arch = "arm"))]
-#[macro_use]
-mod aarch32;
-
-use bitflags::bitflags;
-
 use crate::IntId;
 
-read_sysreg32!(icc_hppir0_el1, 0, c12, c8, 2, read_icc_hppir0_el1);
-read_sysreg32!(icc_hppir1_el1, 0, c12, c12, 2, read_icc_hppir1_el1);
-read_sysreg32!(icc_iar0_el1, 0, c12, c8, 0, read_icc_iar0_el1);
-read_sysreg32!(icc_iar1_el1, 0, c12, c12, 0, read_icc_iar1_el1);
-read_sysreg32!(icc_pmr_el1, 0, c4, c6, 0, read_icc_pmr_el1);
-write_sysreg32!(icc_ctlr_el1, 0, c12, c12, 4, write_icc_ctlr_el1);
-write_sysreg32!(icc_eoir0_el1, 0, c12, c8, 1, write_icc_eoir0_el1);
-write_sysreg32!(icc_eoir1_el1, 0, c12, c12, 1, write_icc_eoir1_el1);
-write_sysreg32!(
-    icc_igrpen0_el1,
-    0,
-    c12,
-    c12,
-    6,
-    write_icc_igrpen0_el1,
-    IccIgrpenEl1
-);
-write_sysreg32!(
-    icc_igrpen1_el1,
-    0,
-    c12,
-    c12,
-    7,
-    write_icc_igrpen1_el1,
-    IccIgrpenEl1
-);
-read_sysreg32!(
-    icc_igrpen1_el3,
-    6,
-    c12,
-    c12,
-    7,
-    read_icc_igrpen1_el3,
-    IccIgrpen1El3
-);
-write_sysreg32!(
-    icc_igrpen1_el3,
-    6,
-    c12,
-    c12,
-    7,
-    write_icc_igrpen1_el3,
-    IccIgrpen1El3
-);
-write_sysreg32!(icc_pmr_el1, 0, c4, c6, 0, write_icc_pmr_el1);
-write_sysreg64!(icc_asgi1r_el1, 0, c12, write_icc_asgi1r_el1, Sgir);
-write_sysreg64!(icc_sgi1r_el1, 0, c12, write_icc_sgi1r_el1, Sgir);
-write_sysreg64!(icc_sgi0r_el1, 0, c12, write_icc_sgi0r_el1, Sgir);
-read_sysreg32!(icc_sre_el1, 0, c12, c12, 5, read_icc_sre_el1, IccSreEl1);
-write_sysreg32!(icc_sre_el1, 0, c12, c12, 5, write_icc_sre_el1, IccSreEl1);
-read_sysreg32!(icc_sre_el2, 4, c12, c11, 5, read_icc_sre_el2, IccSreEl23);
-write_sysreg32!(icc_sre_el2, 4, c12, c11, 5, write_icc_sre_el2, IccSreEl23);
-read_sysreg32!(icc_sre_el3, 6, c12, c12, 5, read_icc_sre_el3, IccSreEl23);
-write_sysreg32!(icc_sre_el3, 6, c12, c12, 5, write_icc_sre_el3, IccSreEl23);
-
-bitflags! {
-    /// Type for the `ICC_IGRPEN0_EL1` and `ICC_IGRPEN1_EL1` registers.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct IccIgrpenEl1: u32 {
-        const EN = 1 << 0;
-    }
-
-    /// Type for the `ICC_IGRPEN_EL3` registers.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct IccIgrpen1El3: u32 {
-        const GRP1NS = 1 << 0;
-        const GRP1S = 1 << 1;
-    }
-
-    /// Type for the `ICC_SRE_EL1` registers.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct IccSreEl1: u32 {
-        /// System register enable.
-        ///
-        /// Enables access to the GIC CPU interface system registers.
-        const SRE = 1 << 0;
-        /// Disable FIQ bypass.
-        const DFB = 1 << 1;
-        /// Disable IRQ bypass.
-        const DIB = 1 << 2;
-    }
-
-    /// Type for the `ICC_SRE_EL2` and `ICC_SRE_EL3` registers.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct IccSreEl23: u32 {
-        /// System register enable.
-        ///
-        /// Enables access to the GIC CPU interface system registers.
-        const SRE = 1 << 0;
-        /// Disable FIQ bypass.
-        const DFB = 1 << 1;
-        /// Disable IRQ bypass.
-        const DIB = 1 << 2;
-        /// Enables lower EL access to ICC_SRE_ELn.
-        const ENABLE = 1 << 3;
-    }
-}
+#[cfg(all(not(any(test, feature = "fakes")), target_arch = "arm"))]
+pub use arm_sysregs::{
+    IccAsgi1r as IccAsgi1rEl1, IccCtlr as IccCtlrEl1, IccEoir0 as IccEoir0El1,
+    IccEoir1 as IccEoir1El1, IccHsre as IccSreEl2, IccIgrpen0 as IccIgrpen0El1,
+    IccIgrpen1 as IccIgrpen1El1, IccMgrpen1 as IccIgrpen1El3, IccMsre as IccSreEl3,
+    IccPmr as IccPmrEl1, IccSgi0r as IccSgi0rEl1, IccSgi1r as IccSgi1rEl1, IccSre as IccSreEl1,
+    read_icc_hppir0 as read_icc_hppir0_el1, read_icc_hppir1 as read_icc_hppir1_el1,
+    read_icc_hsre as read_icc_sre_el2, read_icc_iar0 as read_icc_iar0_el1,
+    read_icc_iar1 as read_icc_iar1_el1, read_icc_mgrpen1 as read_icc_igrpen1_el3,
+    read_icc_msre as read_icc_sre_el3, read_icc_pmr as read_icc_pmr_el1,
+    read_icc_sre as read_icc_sre_el1, write_icc_asgi1r as write_icc_asgi1r_el1,
+    write_icc_ctlr as write_icc_ctlr_el1, write_icc_eoir0 as write_icc_eoir0_el1,
+    write_icc_eoir1 as write_icc_eoir1_el1, write_icc_hsre as write_icc_sre_el2,
+    write_icc_igrpen0 as write_icc_igrpen0_el1, write_icc_igrpen1 as write_icc_igrpen1_el1,
+    write_icc_mgrpen1 as write_icc_igrpen1_el3, write_icc_msre as write_icc_sre_el3,
+    write_icc_pmr as write_icc_pmr_el1, write_icc_sgi0r as write_icc_sgi0r_el1,
+    write_icc_sgi1r as write_icc_sgi1r_el1, write_icc_sre as write_icc_sre_el1,
+};
+#[cfg(any(test, feature = "fakes", not(target_arch = "arm")))]
+pub use arm_sysregs::{
+    IccAsgi1rEl1, IccCtlrEl1, IccEoir0El1, IccEoir1El1, IccIgrpen0El1, IccIgrpen1El1,
+    IccIgrpen1El3, IccPmrEl1, IccSgi0rEl1, IccSgi1rEl1, IccSreEl1, IccSreEl2, IccSreEl3,
+    read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
+    read_icc_igrpen1_el3, read_icc_pmr_el1, read_icc_sre_el1, read_icc_sre_el2, read_icc_sre_el3,
+    write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
+    write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_igrpen1_el3, write_icc_pmr_el1,
+    write_icc_sgi0r_el1, write_icc_sgi1r_el1, write_icc_sre_el1, write_icc_sre_el2,
+    write_icc_sre_el3,
+};
 
 /// Software Generated Interrupt Group Register.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -164,5 +82,39 @@ impl Sgir {
 impl From<Sgir> for u64 {
     fn from(value: Sgir) -> Self {
         value.0
+    }
+}
+
+impl From<Sgir> for IccSgi0rEl1 {
+    fn from(value: Sgir) -> Self {
+        Self::from_bits_retain(value.0)
+    }
+}
+
+impl From<Sgir> for IccSgi1rEl1 {
+    fn from(value: Sgir) -> Self {
+        Self::from_bits_retain(value.0)
+    }
+}
+
+impl From<Sgir> for IccAsgi1rEl1 {
+    fn from(value: Sgir) -> Self {
+        Self::from_bits_retain(value.0)
+    }
+}
+
+impl From<IntId> for IccEoir0El1 {
+    fn from(intid: IntId) -> Self {
+        let mut value = Self::empty();
+        value.set_intid(intid.0);
+        value
+    }
+}
+
+impl From<IntId> for IccEoir1El1 {
+    fn from(intid: IntId) -> Self {
+        let mut value = Self::empty();
+        value.set_intid(intid.0);
+        value
     }
 }
