@@ -13,7 +13,7 @@ keywords = ["arm", "aarch64", "driver", "gic", "interrupt-controller"]
 categories = ["embedded", "no-std", "hardware-support"]
 
 [dependencies]
-arm-sysregs = { version = "0.2.6", features = ["el3"] }
+arm-sysregs = { version = "0.2.6", features = ["el1"] }
 bitflags = "2.11.0"
 safe-mmio = "0.3.0"
 thiserror = { version = "2.0.18", default-features = false }
@@ -23,7 +23,11 @@ zerocopy = { version = "0.8.42", features = ["derive"] }
 arm-sysregs = { version = "0.2.6", features = ["fakes"] }
 
 [features]
+el2 = ["arm-sysregs/el2"]
+el3 = ["el2", "arm-sysregs/el3"]
 fakes = ["arm-sysregs/fakes"]
 
 [package.metadata.docs.rs]
 default-target = "aarch64-unknown-none"
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

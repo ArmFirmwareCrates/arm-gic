@@ -15,6 +15,8 @@
   so is not supported. Removed the `enable` parameter from
   `GicCpuInterface::enable_system_register_el2` and `GicCpuInterface::enable_system_register_el3`
   for the same reason.
+- Added `el2` and `el3` features. Methods on `GicCpuInterface` which only work in EL2 or EL3 are
+  guarded by these features.
 
 ### Improvements
 

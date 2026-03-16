@@ -13,6 +13,18 @@ software-generated interrupts should be considered. Look at the ARM manuals for 
 
 This is a trustedfirmware.org maintained project.
 
+## Requirements from higher exception levels
+
+To use a GICv3 (and hence this driver) in EL2, it must first be enabled by EL3 firmware. In
+particular, `ICC_SRE_EL3.SRE` and `ICC_SRE_EL3.Enable` must be set to 1. To use it at EL1,
+`ICC_SRE_EL2.SRE` and `ICC_SRE_EL2.Enable` must also be set to 1.
+
+## Feature flags
+
+- `el2`: Enables methods on `GicCpuInterface` which access EL2 system registers.
+- `el3`: Enables methods on `GicCpuInterface` which access EL3 system registers.
+- `fakes`: Accesses fake system registers rather than the real ones, for running tests on the host.
+
 ## License and Copyright
 
 ### Outbound license

@@ -6,32 +6,57 @@ use crate::IntId;
 #[cfg(all(not(any(test, feature = "fakes")), target_arch = "arm"))]
 pub use arm_sysregs::{
     IccAsgi1r as IccAsgi1rEl1, IccCtlr as IccCtlrEl1, IccEoir0 as IccEoir0El1,
-    IccEoir1 as IccEoir1El1, IccHsre as IccSreEl2, IccIgrpen0 as IccIgrpen0El1,
-    IccIgrpen1 as IccIgrpen1El1, IccMgrpen1 as IccIgrpen1El3, IccMsre as IccSreEl3,
+    IccEoir1 as IccEoir1El1, IccIgrpen0 as IccIgrpen0El1, IccIgrpen1 as IccIgrpen1El1,
     IccPmr as IccPmrEl1, IccSgi0r as IccSgi0rEl1, IccSgi1r as IccSgi1rEl1, IccSre as IccSreEl1,
     read_icc_hppir0 as read_icc_hppir0_el1, read_icc_hppir1 as read_icc_hppir1_el1,
-    read_icc_hsre as read_icc_sre_el2, read_icc_iar0 as read_icc_iar0_el1,
-    read_icc_iar1 as read_icc_iar1_el1, read_icc_mgrpen1 as read_icc_igrpen1_el3,
-    read_icc_msre as read_icc_sre_el3, read_icc_pmr as read_icc_pmr_el1,
-    read_icc_sre as read_icc_sre_el1, write_icc_asgi1r as write_icc_asgi1r_el1,
-    write_icc_ctlr as write_icc_ctlr_el1, write_icc_eoir0 as write_icc_eoir0_el1,
-    write_icc_eoir1 as write_icc_eoir1_el1, write_icc_hsre as write_icc_sre_el2,
+    read_icc_iar0 as read_icc_iar0_el1, read_icc_iar1 as read_icc_iar1_el1,
+    read_icc_pmr as read_icc_pmr_el1, read_icc_sre as read_icc_sre_el1,
+    write_icc_asgi1r as write_icc_asgi1r_el1, write_icc_ctlr as write_icc_ctlr_el1,
+    write_icc_eoir0 as write_icc_eoir0_el1, write_icc_eoir1 as write_icc_eoir1_el1,
     write_icc_igrpen0 as write_icc_igrpen0_el1, write_icc_igrpen1 as write_icc_igrpen1_el1,
-    write_icc_mgrpen1 as write_icc_igrpen1_el3, write_icc_msre as write_icc_sre_el3,
     write_icc_pmr as write_icc_pmr_el1, write_icc_sgi0r as write_icc_sgi0r_el1,
     write_icc_sgi1r as write_icc_sgi1r_el1, write_icc_sre as write_icc_sre_el1,
 };
 #[cfg(any(test, feature = "fakes", not(target_arch = "arm")))]
 pub use arm_sysregs::{
-    IccAsgi1rEl1, IccCtlrEl1, IccEoir0El1, IccEoir1El1, IccIgrpen0El1, IccIgrpen1El1,
-    IccIgrpen1El3, IccPmrEl1, IccSgi0rEl1, IccSgi1rEl1, IccSreEl1, IccSreEl2, IccSreEl3,
-    read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
-    read_icc_igrpen1_el3, read_icc_pmr_el1, read_icc_sre_el1, read_icc_sre_el2, read_icc_sre_el3,
-    write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
-    write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_igrpen1_el3, write_icc_pmr_el1,
-    write_icc_sgi0r_el1, write_icc_sgi1r_el1, write_icc_sre_el1, write_icc_sre_el2,
+    IccAsgi1rEl1, IccCtlrEl1, IccEoir0El1, IccEoir1El1, IccIgrpen0El1, IccIgrpen1El1, IccPmrEl1,
+    IccSgi0rEl1, IccSgi1rEl1, IccSreEl1, read_icc_hppir0_el1, read_icc_hppir1_el1,
+    read_icc_iar0_el1, read_icc_iar1_el1, read_icc_pmr_el1, read_icc_sre_el1, write_icc_asgi1r_el1,
+    write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1, write_icc_igrpen0_el1,
+    write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1, write_icc_sgi1r_el1,
+    write_icc_sre_el1,
+};
+#[cfg(all(
+    not(any(test, feature = "fakes")),
+    target_arch = "arm",
+    feature = "el2"
+))]
+pub use arm_sysregs::{
+    IccHsre as IccSreEl2, read_icc_hsre as read_icc_sre_el2, write_icc_hsre as write_icc_sre_el2,
+};
+#[cfg(all(
+    any(test, feature = "fakes", not(target_arch = "arm")),
+    feature = "el3"
+))]
+pub use arm_sysregs::{
+    IccIgrpen1El3, IccSreEl3, read_icc_igrpen1_el3, read_icc_sre_el3, write_icc_igrpen1_el3,
     write_icc_sre_el3,
 };
+#[cfg(all(
+    not(any(test, feature = "fakes")),
+    target_arch = "arm",
+    feature = "el3"
+))]
+pub use arm_sysregs::{
+    IccMgrpen1 as IccIgrpen1El3, IccMsre as IccSreEl3, read_icc_mgrpen1 as read_icc_igrpen1_el3,
+    read_icc_msre as read_icc_sre_el3, write_icc_mgrpen1 as write_icc_igrpen1_el3,
+    write_icc_msre as write_icc_sre_el3,
+};
+#[cfg(all(
+    any(test, feature = "fakes", not(target_arch = "arm")),
+    feature = "el2"
+))]
+pub use arm_sysregs::{IccSreEl2, read_icc_sre_el2, write_icc_sre_el2};
 
 /// Software Generated Interrupt Group Register.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

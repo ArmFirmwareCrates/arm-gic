@@ -1,17 +1,22 @@
 // Copyright The arm-gic Authors.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#[cfg(feature = "el3")]
+use crate::sysreg::{
+    IccIgrpen1El3, IccSreEl3, read_icc_igrpen1_el3, read_icc_sre_el3, write_icc_igrpen1_el3,
+    write_icc_sre_el3,
+};
+#[cfg(feature = "el2")]
+use crate::sysreg::{IccSreEl2, read_icc_sre_el2, write_icc_sre_el2};
 use crate::{
     IntId,
     gicv3::GicError,
     sysreg::{
-        IccIgrpen0El1, IccIgrpen1El1, IccIgrpen1El3, IccPmrEl1, IccSreEl1, IccSreEl2, IccSreEl3,
-        Sgir, read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
-        read_icc_igrpen1_el3, read_icc_pmr_el1, read_icc_sre_el1, read_icc_sre_el2,
-        read_icc_sre_el3, write_icc_asgi1r_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
-        write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_igrpen1_el3, write_icc_pmr_el1,
-        write_icc_sgi0r_el1, write_icc_sgi1r_el1, write_icc_sre_el1, write_icc_sre_el2,
-        write_icc_sre_el3,
+        IccIgrpen0El1, IccIgrpen1El1, IccPmrEl1, IccSreEl1, Sgir, read_icc_hppir0_el1,
+        read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1, read_icc_pmr_el1,
+        read_icc_sre_el1, write_icc_asgi1r_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
+        write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1,
+        write_icc_sgi1r_el1, write_icc_sre_el1,
     },
 };
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
@@ -43,6 +48,7 @@ impl GicCpuInterface {
     }
 
     /// Enables or disables group 1 secure interrupts.
+    #[cfg(feature = "el3")]
     pub fn enable_group1_secure(enable: bool) {
         let mut value = read_icc_igrpen1_el3();
         value.set(IccIgrpen1El3::ENABLEGRP1S, enable);
@@ -50,6 +56,7 @@ impl GicCpuInterface {
     }
 
     /// Enables or disables group 1 non-secure interrupts.
+    #[cfg(feature = "el3")]
     pub fn enable_group1_non_secure(enable: bool) {
         let mut value = read_icc_igrpen1_el3();
         value.set(IccIgrpen1El3::ENABLEGRP1NS, enable);
@@ -149,6 +156,7 @@ impl GicCpuInterface {
     /// Enables the system register interface to the `ICH_*` registers and the EL1 and EL2 `ICC_*`
     /// registers for EL2. The `enable_lower` parameter controls the lower exception level access to
     /// `ICC_SRE_EL1`.
+    #[cfg(feature = "el2")]
     pub fn enable_system_register_el2(enable_lower: bool) {
         let mut value = read_icc_sre_el2();
         value.set(IccSreEl2::SRE, true);
@@ -163,6 +171,7 @@ impl GicCpuInterface {
     /// Enables the system register interface to the `ICH_*` registers and the EL1, EL2, and EL3
     /// `ICC_*` registers for EL3. The `enable_lower` parameter controls the lower exception level
     /// access to `ICC_SRE_EL1` and `ICC_SRE_EL2`.
+    #[cfg(feature = "el3")]
     pub fn enable_system_register_el3(enable_lower: bool) {
         let mut value = read_icc_sre_el3();
         value.set(IccSreEl3::SRE, true);
@@ -185,6 +194,7 @@ impl GicCpuInterface {
     }
 
     /// Disables IRQ and FIQ bypass for EL2.
+    #[cfg(feature = "el2")]
     pub fn disable_legacy_interrupt_bypass_el2(disable: bool) {
         let mut value = read_icc_sre_el2();
         value.set(IccSreEl2::DFB | IccSreEl2::DIB, disable);
@@ -195,6 +205,7 @@ impl GicCpuInterface {
     }
 
     /// Disables IRQ and FIQ bypass for EL3.
+    #[cfg(feature = "el3")]
     pub fn disable_legacy_interrupt_bypass_el3(disable: bool) {
         let mut value = read_icc_sre_el3();
         value.set(IccSreEl3::DFB | IccSreEl3::DIB, disable);
@@ -250,6 +261,7 @@ mod tests {
         assert_eq!(0x0000_0000, read_reg!(icc_igrpen1_el1).bits());
     }
 
+    #[cfg(feature = "el3")]
     #[test]
     fn enable_group1_secure_non_secure() {
         clear_regs();
@@ -377,6 +389,7 @@ mod tests {
         assert_eq!(0x0000_0001, read_reg!(icc_sre_el1).bits());
     }
 
+    #[cfg(feature = "el2")]
     #[test]
     fn enable_system_register_el2() {
         clear_regs();
@@ -388,6 +401,7 @@ mod tests {
         assert_eq!(0x0000_0009, read_reg!(icc_sre_el2).bits());
     }
 
+    #[cfg(feature = "el3")]
     #[test]
     fn enable_system_register_el3() {
         clear_regs();
@@ -400,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn disable_legacy_interrupt_bypass() {
+    fn disable_legacy_interrupt_bypass_el1() {
         clear_regs();
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el1(true);
@@ -408,12 +422,24 @@ mod tests {
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el1(false);
         assert_eq!(0x0000_0000, read_icc_sre_el1().bits());
+    }
+
+    #[cfg(feature = "el2")]
+    #[test]
+    fn disable_legacy_interrupt_bypass_el2() {
+        clear_regs();
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el2(true);
         assert_eq!(0x0000_0006, read_icc_sre_el2().bits());
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el2(false);
         assert_eq!(0x0000_0000, read_icc_sre_el2().bits());
+    }
+
+    #[cfg(feature = "el3")]
+    #[test]
+    fn disable_legacy_interrupt_bypass_el3() {
+        clear_regs();
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el3(true);
         assert_eq!(0x0000_0006, read_icc_sre_el3().bits());
