@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+### Improvements
+
+- Fixed doc build on docs.rs.
+
 ## 0.8.0
 
 ### Breaking changes
