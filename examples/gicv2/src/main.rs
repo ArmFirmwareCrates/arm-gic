@@ -4,8 +4,6 @@
 #![no_std]
 #![no_main]
 
-mod exceptions;
-
 use aarch64_rt::{entry, exception_handlers, ExceptionHandlers, RegisterStateRef};
 use arm_gic::{
     gicv2::{
