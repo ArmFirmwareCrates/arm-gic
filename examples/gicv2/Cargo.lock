@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "arm-gic"
-version = "0.7.2"
+version = "0.8.1"
 dependencies = [
  "arm-sysregs",
  "bitflags",
@@ -76,12 +76,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
 
 [[package]]
+name = "flat_device_tree"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d29ba76ecf314f211601c5641d6fc4393d8f56a3b7764b3c8544639aad965a9"
+
+[[package]]
 name = "gicv2"
 version = "0.1.0"
 dependencies = [
  "aarch64-rt",
  "arm-gic",
  "arm-pl011-uart",
+ "flat_device_tree",
  "log",
  "smccc 0.1.1",
  "spin",

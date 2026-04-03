@@ -22,16 +22,13 @@ use core::{
     ptr::NonNull,
     sync::atomic::{AtomicU8, Ordering},
 };
+use flat_device_tree::Fdt;
 use log::{LevelFilter, Log, Metadata, Record};
 use smccc::{psci::system_off, Hvc};
 use spin::{mutex::SpinMutex, Once};
 
 /// Base memory-mapped address of the primary PL011 UART device.
 pub const UART_BASE_ADDRESS: *mut u32 = 0x900_0000 as _;
-
-// Base addresses of the GICv2 distributor and redistributor.
-const GICD_BASE_ADDRESS: *mut Gicd = 0x800_0000 as _;
-const GICC_BASE_ADDRESS: *mut Gicc = 0x801_0000 as _;
 
 // Interrupt ID for physical EL1 timer is 30, and PPI interrupts start from 16:
 const TIMER_IRQID: IntId = IntId::ppi(30 - 16);
@@ -145,7 +142,7 @@ impl ExceptionHandlers for Exceptions {
 
 exception_handlers!(Exceptions);
 entry!(main);
-fn main(_x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
+fn main(x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
     // Initialise logger uart
     {
         use arm_pl011_uart::{DataBits, LineConfig, Parity, StopBits, UniqueMmioPointer};
@@ -172,11 +169,58 @@ fn main(_x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
         log::set_max_level(LevelFilter::Trace);
     }
 
+    // Base addresses of the GICv2 distributor and redistributor.
+    let gicd_base_address: *mut Gicd;
+    let gicc_base_address: *mut Gicc;
+
+    {
+        // Extract the addresses from device tree:
+
+        // SAFETY: QEMU virt machine bootloader passes DTB pointer via x0 register.
+        let fdt = unsafe { Fdt::from_ptr(x0 as *const u8) }
+            .expect("Could not parse devicetree from x0 register");
+
+        // Locate gicv2 node in devicetree
+        // Documentation: https://www.kernel.org/doc/Documentation/devicetree/bindings/interrupt-controller/arm%2Cgic.txt
+        let gic_node = fdt
+            .find_compatible(&[
+                "arm,arm1176jzf-devchip-gic",
+                "arm,arm11mp-gic",
+                "arm,cortex-a15-gic",
+                "arm,cortex-a7-gic",
+                "arm,cortex-a9-gic",
+                "arm,eb11mp-gic",
+                "arm,gic-400",
+                "arm,pl390",
+                "arm,tc11mp-gic",
+                "brcm,brahma-b15-gic",
+                "nvidia,tegra210-agic",
+                "qcom,msm-8660-qgic",
+                "qcom,msm-qgic2",
+            ])
+            .expect("Could not find gicv2 compatible node in device tree");
+
+        let mut regs = gic_node.reg();
+
+        gicd_base_address = regs
+            .next()
+            .expect("Expected GIC distributor register base")
+            .starting_address
+            .cast_mut()
+            .cast();
+        gicc_base_address = regs
+            .next()
+            .expect("Expected GIC cpu interface register base")
+            .starting_address
+            .cast_mut()
+            .cast();
+    }
+
     // Initialise GIC
     {
-        // SAFETY: These are the correct addresses for the QEMU virt machine and are mapped as device
-        // memory
-        let mut gic = unsafe { GicV2::new(GICD_BASE_ADDRESS, GICC_BASE_ADDRESS) };
+        // SAFETY: These are the correct addresses for the QEMU virt machine as given by the passed
+        // device tree and are mapped as device memory
+        let mut gic = unsafe { GicV2::new(gicd_base_address, gicc_base_address) };
         let gic_typer = gic.typer();
         log::info!(
             "GICv2 typer: lockable_spi_count {:?} has_security_extension: {:?} cpu_count: {:?}

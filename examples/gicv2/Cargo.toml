@@ -9,5 +9,6 @@ aarch64-rt = { version = "0.4.3", default-features = false, features = ["el1", "
 arm-gic = { path = "../.." }
 log = "0.4.22"
 arm-pl011-uart = "0.5"
+flat_device_tree = "3.1.1"
 smccc = "0.1.1"
 spin = "0.10.0"
