@@ -315,6 +315,22 @@ pub enum RangeSelectorSupport {
     AffZero256,
 }
 
+/// Peripheral ID2 Register. `GICD_PIDR2`, `GICR_PIDR2`, and `GITS_PIDR2` all use the same format.
+#[derive(Clone, Copy, Debug, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
+#[repr(transparent)]
+pub struct Pidr2(u32);
+
+impl Pidr2 {
+    const ARCH_REV_SHIFT: u32 = 4;
+    const ARCH_REV_MASK: u32 = 0b1111;
+
+    /// Returns the revision of the GIC architecture. The returned value indicates the GIC revision
+    /// (e.g., `0x3` corresponds to GICv3).
+    pub fn arch_rev(&self) -> u8 {
+        ((self.0 >> Self::ARCH_REV_SHIFT) & Self::ARCH_REV_MASK) as u8
+    }
+}
+
 /// GIC Distributor registers.
 #[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
 #[repr(C, align(8))]
@@ -424,7 +440,11 @@ pub struct Gicd {
     /// Implementation defined registers.
     pub implementation_defined2: [u32; 4084],
     /// ID registers.
-    pub id_registers: [ReadPure<u32>; 12],
+    pub id_registers0: [ReadPure<u32>; 6],
+    /// Distributor Peripheral ID2 Register
+    pub pidr2: ReadPure<Pidr2>,
+    /// ID registers.
+    pub id_registers7: [ReadPure<u32>; 5],
 }
 
 impl Gicd {
@@ -520,7 +540,11 @@ pub struct Gicr {
     /// Implementation defined registers.
     pub implementation_defined5: [u32; 4084],
     /// ID registers.
-    pub id_registers: [ReadPure<u32>; 12],
+    pub id_registers0: [ReadPure<u32>; 6],
+    /// Redistributor Peripheral ID2 Register
+    pub pidr2: ReadPure<Pidr2>,
+    /// ID registers.
+    pub id_registers7: [ReadPure<u32>; 5],
 }
 
 /// GIC Redistributor SGI and PPI registers.
@@ -648,5 +672,11 @@ mod tests {
         // This flag is bit 5.
         assert!(!GicrTyper(0b0000000).disable_processor_group_supported());
         assert!(GicrTyper(0b0100000).disable_processor_group_supported());
+    }
+
+    #[test]
+    fn pidr2() {
+        assert_eq!(0x03, Pidr2(0xabcd_ef34).arch_rev());
+        assert_eq!(0x04, Pidr2(0x1234_5647).arch_rev());
     }
 }

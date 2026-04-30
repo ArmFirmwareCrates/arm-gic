@@ -5,7 +5,7 @@ use crate::{
     IntId, Trigger, clear_bit,
     gicv3::{
         GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, register_count,
-        registers::{Gicd, GicdCtlr, Typer},
+        registers::{Gicd, GicdCtlr, Pidr2, Typer},
         set_regs,
     },
     set_bit,
@@ -394,6 +394,11 @@ impl<'a> GicDistributor<'a> {
     /// Returns information about what the GIC implementation supports.
     pub fn typer(&self) -> Typer {
         field_shared!(self.regs, typer).read()
+    }
+
+    /// Returns the value of the Distributor Peripheral ID2 Register.
+    pub fn pidr2(&self) -> Pidr2 {
+        field_shared!(self.regs, pidr2).read()
     }
 
     /// Enables affinity routing in non-secure state.
@@ -1047,6 +1052,17 @@ mod tests {
         let distributor = regs.distributor_for_test();
         let typer = distributor.typer();
         assert!(typer.espi_supported());
+    }
+
+    #[test]
+    fn pidr2() {
+        let mut regs = FakeDistributor::new();
+
+        regs.regs_write(0xffe8, 0xabcd_0143);
+
+        let distributor = regs.distributor_for_test();
+        let pidr2 = distributor.pidr2();
+        assert_eq!(0x4, pidr2.arch_rev());
     }
 
     #[test]

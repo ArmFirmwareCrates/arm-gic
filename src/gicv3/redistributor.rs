@@ -5,7 +5,7 @@ use crate::{
     IntId, Trigger, clear_bit,
     gicv3::{
         GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, register_count,
-        registers::{GicrCtlr, GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Sgi, Waker},
+        registers::{GicrCtlr, GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Pidr2, Sgi, Waker},
         set_regs,
     },
     set_bit,
@@ -314,6 +314,12 @@ impl<'a> GicRedistributor<'a> {
             Sgi::ICFGR_BITS,
             0x0000_0000u32,
         );
+    }
+
+    /// Returns the value of the Redistributor Peripheral ID2 Register.
+    pub fn pidr2(&self) -> Pidr2 {
+        let gicr = field_shared!(self.regs, gicr);
+        field_shared!(gicr, pidr2).read()
     }
 
     /// Sets the interrupt priority of the given interrupt ID. This function will panic if invoked
@@ -1319,5 +1325,16 @@ mod tests {
         let redistributor = regs.redistributor_for_test();
         let typer = redistributor.typer();
         assert_eq!(0xcd01, typer.processor_number());
+    }
+
+    #[test]
+    fn pidr2() {
+        let mut regs = FakeRedistributor::new();
+
+        regs.regs_write(0x0_ffe8, 0xabcd_0143);
+
+        let redistributor = regs.redistributor_for_test();
+        let pidr2 = redistributor.pidr2();
+        assert_eq!(0x4, pidr2.arch_rev());
     }
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## Future
+
+### Breaking changes
+
+- Split the `id_registers` fields in the `Gicd` and `Gicr` types into `id_registers0`, `pidr2`, and
+  `id_registers7`.
+
+### Improvements
+
+- Added `GicDistributor::pidr2()` and `GicRedistributor::pidr2()` methods.
+
 ## 0.8.1
 
 ### Improvements
