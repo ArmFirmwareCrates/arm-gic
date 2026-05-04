@@ -6,6 +6,9 @@
 
 - Split the `id_registers` fields in the `Gicd` and `Gicr` types into `id_registers0`, `pidr2`, and
   `id_registers7`.
+- Changed `GicV3::new` and `GicRedistributorIterator::new` to derive the redistributor frame layout
+  from `GICR_TYPER.VLPIS` instead of a caller-provided `gic_v4` flag, while still validating the
+  reported GIC version. These functions now return `Result<_, GicError>`.
 
 ### Improvements
 

@@ -65,10 +65,33 @@ macro_rules! restore_regs {
     };
 }
 
+/// Returns the frame count between redistributor blocks.
+///
+/// # Safety
+///
+/// The gicr_base must point to the GIC redistributor registers. This region must be mapped into
+/// the address space of the process as device memory, and not have any other aliases, either
+/// via another instance of this driver or otherwise.
+pub(crate) unsafe fn get_redistributor_frame_count(
+    gicr_base: NonNull<GicrSgi>,
+) -> Result<usize, GicError> {
+    // SAFETY: The caller promised that `gicr_base` was valid and there are no aliases.
+    let gicr_window = unsafe { UniqueMmioPointer::new(gicr_base) };
+    let gicr = field_shared!(gicr_window, gicr);
+    let vlpis = field_shared!(gicr, typer).read().virtual_lpis_supported();
+    let arch_rev = field_shared!(gicr, pidr2).read().arch_rev();
+
+    match (arch_rev, vlpis) {
+        (3, false) => Ok(1),
+        (4, true) => Ok(2),
+        _ => Err(GicError::InvalidRedistributorFrameLayout),
+    }
+}
+
 /// Iterator over the redistributor register blocks.
 pub struct GicRedistributorIterator<'a> {
     pointer: Option<NonNull<GicrSgi>>,
-    gic_v4: bool,
+    frame_count: usize,
     phantom: PhantomData<&'a GicrSgi>,
 }
 
@@ -80,12 +103,15 @@ impl GicRedistributorIterator<'_> {
     /// The caller must ensure that `base` points to a continiously mapped GIC redistributor memory
     /// area that spans until the last redistributor block (N) where GICR_TYPER.Last is set and
     /// there must be no other references to this area.
-    pub unsafe fn new(base: NonNull<GicrSgi>, gic_v4: bool) -> Self {
-        Self {
-            pointer: Some(base),
-            gic_v4,
+    pub unsafe fn new(gicr_base: NonNull<GicrSgi>) -> Result<Self, GicError> {
+        // SAFETY: The caller promised that `gicr_base` was valid and there are no aliases.
+        let frame_count = unsafe { get_redistributor_frame_count(gicr_base) }?;
+
+        Ok(Self {
+            pointer: Some(gicr_base),
+            frame_count,
             phantom: PhantomData,
-        }
+        })
     }
 }
 
@@ -104,19 +130,11 @@ impl<'a> Iterator for GicRedistributorIterator<'a> {
 
         self.pointer = if !typer.last_redistributor() {
             // Step to next redistributor block
-            let redistributor_size = if self.gic_v4 && typer.virtual_lpis_supported() {
-                // In this case GicV4 adds 2 frames:
-                // vlpi: 64KiB
-                // reserved: 64KiB
-                2
-            } else {
-                1
-            };
 
             // Safety: GicRedistributorIterator::new promises that base points to a valid GIC
             // redistributor block and GICR_TYPER.Last was not set for this redistributor. It is
             // safe to step the pointer to the next redistributor block.
-            unsafe { Some(pointer.add(redistributor_size)) }
+            unsafe { Some(pointer.add(self.frame_count)) }
         } else {
             // Clear pointer at the last redistributor block.
             None

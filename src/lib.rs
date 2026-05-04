@@ -30,7 +30,7 @@
 //! let gicr = unsafe { NonNull::new(GICR_BASE_ADDRESS).unwrap() };
 //!
 //! // Initialise the GIC.
-//! let mut gic = unsafe { GicV3::new(gicd, gicr, 1, false) };
+//! let mut gic = unsafe { GicV3::new(gicd, gicr, 1).expect("Failed to initialise GIC") };
 //! gic.setup(0);
 //!
 //! // Configure an SGI and then send it to ourself.

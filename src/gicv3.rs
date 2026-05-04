@@ -11,14 +11,14 @@ pub mod registers;
 
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 use crate::sysreg::{IccCtlrEl1, write_icc_ctlr_el1};
-use crate::{IntId, Trigger};
+use crate::{IntId, Trigger, gicv3::redistributor::get_redistributor_frame_count};
 use core::ptr::NonNull;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 pub use cpu_interface::GicCpuInterface;
 pub use distributor::{GicDistributor, GicDistributorContext};
 pub use redistributor::{GicRedistributor, GicRedistributorContext, GicRedistributorIterator};
 use registers::{Gicd, GicdCtlr, GicrSgi, GicrTyper, Typer};
-use safe_mmio::{UniqueMmioPointer, field_shared, fields::ReadPureWrite};
+use safe_mmio::{UniqueMmioPointer, fields::ReadPureWrite};
 use thiserror::Error;
 use zerocopy::{Immutable, IntoBytes};
 
@@ -39,6 +39,8 @@ pub enum GicError {
     InvalidGicdIntid(IntId),
     #[error("the context size is smaller than the implemented interrupt count: {0:?} > {1:?}")]
     InvalidContextSize(usize, usize),
+    #[error("unsupported redistributor frame layout")]
+    InvalidRedistributorFrameLayout,
 }
 
 /// Highest priority value of Group 0 and Secure Group 1 interrupts.
@@ -85,37 +87,6 @@ pub struct GicV3<'a> {
     gicr_frame_count: usize,
 }
 
-/// Returns the frame count between redistributor blocks.
-///
-/// # Safety
-///
-/// The gicr_base must point to the GIC redistributor registers. This region must be mapped into
-/// the address space of the process as device memory, and not have any other aliases, either
-/// via another instance of this driver or otherwise.
-unsafe fn get_redistributor_frame_count(gicr_base: NonNull<GicrSgi>, gic_v4: bool) -> usize {
-    if !gic_v4 {
-        return 1;
-    }
-
-    // SAFETY: The caller of `GicV3::new` promised that `gicr_base` was valid
-    // and there are no aliases.
-    let first_gicr_window = unsafe { UniqueMmioPointer::new(gicr_base) };
-
-    let first_gicr = field_shared!(first_gicr_window, gicr);
-
-    if field_shared!(first_gicr, typer)
-        .read()
-        .virtual_lpis_supported()
-    {
-        // In this case GicV4 adds 2 frames:
-        // vlpi: 64KiB
-        // reserved: 64KiB
-        2
-    } else {
-        1
-    }
-}
-
 impl<'a> GicV3<'a> {
     /// Constructs a new instance of the driver for a GIC with the given distributor and
     /// redistributor base addresses.
@@ -129,15 +100,14 @@ impl<'a> GicV3<'a> {
         gicd: UniqueMmioPointer<'a, Gicd>,
         gicr_base: NonNull<GicrSgi>,
         cpu_count: usize,
-        gic_v4: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, GicError> {
+        Ok(Self {
             gicd: GicDistributor::new(gicd),
             gicr_base,
             cpu_count,
             // Safety: The same safety requirements are propagated to the caller of this function.
-            gicr_frame_count: unsafe { get_redistributor_frame_count(gicr_base, gic_v4) },
-        }
+            gicr_frame_count: unsafe { get_redistributor_frame_count(gicr_base)? },
+        })
     }
 
     /// Enables system register access, marks the given CPU core as awake, and sets some basic
@@ -446,6 +416,8 @@ mod tests {
         }
 
         pub fn instance_for_test(&mut self) -> GicV3<'_> {
+            self.redist_regs_write(0, 0xffe8, 3 << 4); // GICv3
+
             let gicd = UniqueMmioPointer::from(transmute_mut!(&mut self.dist_regs));
             let gicr_base: &mut [GicrSgi; Self::CORE_COUNT] = transmute_mut!(&mut self.redist_regs);
 
@@ -455,8 +427,8 @@ mod tests {
                     gicd,
                     NonNull::new(gicr_base.as_mut_ptr()).unwrap(),
                     Self::CORE_COUNT,
-                    false,
                 )
+                .unwrap()
             }
         }
     }
