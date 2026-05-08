@@ -31,3 +31,7 @@ fakes = ["arm-sysregs/fakes"]
 default-target = "aarch64-unknown-none"
 features = ["el2", "el3"]
 rustdoc-args = ["--cfg", "docsrs"]
+
+[workspace]
+resolver = "3"
+members = [".", "examples/gicv2"]

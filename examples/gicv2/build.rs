@@ -3,6 +3,6 @@
 
 fn main() {
     println!("cargo:rustc-link-arg=-Timage.ld");
-    println!("cargo:rustc-link-arg=-Tqemu.ld");
-    println!("cargo:rerun-if-changed=qemu.ld");
+    println!("cargo:rustc-link-arg=-Texamples/gicv2/qemu.ld");
+    println!("cargo:rerun-if-changed=examples/gicv2/qemu.ld");
 }

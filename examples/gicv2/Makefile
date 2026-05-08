@@ -1,7 +1,8 @@
+root_dir := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))/../../
 target := aarch64-unknown-none
 mode := release
-kernel := target/$(target)/$(mode)/gicv2
-kernel_qemu_bin := target/$(target)/$(mode)/gicv2.bin
+kernel := $(root_dir)/target/$(target)/$(mode)/gicv2-example
+kernel_qemu_bin := $(root_dir)/target/$(target)/$(mode)/gicv2-example.bin
 
 sysroot := $(shell rustc --print sysroot)
 objdump := $(shell find $(sysroot) -name llvm-objdump) --arch-name=aarch64
@@ -19,13 +20,13 @@ env:
 	rustup target add $(target)
 
 kernel_qemu:
-	cargo build $(BUILD_ARGS)
+	cargo build --bin gicv2-example $(BUILD_ARGS)
 
 $(kernel_qemu_bin): kernel_qemu
 	$(objcopy) -O binary $(kernel) $(kernel_qemu_bin)
 
 clean:
-	cargo clean
+	cargo clean --manifest-path Cargo.toml
 
 qemu: $(kernel_qemu_bin)
 	qemu-system-aarch64 \
