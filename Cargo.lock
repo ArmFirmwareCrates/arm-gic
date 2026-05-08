@@ -95,6 +95,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gicv3-example"
+version = "0.1.0"
+dependencies = [
+ "aarch64-rt",
+ "arm-gic",
+ "arm-pl011-uart",
+ "flat_device_tree",
+ "log",
+ "smccc",
+ "spin",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

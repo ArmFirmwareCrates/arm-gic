@@ -34,4 +34,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
 resolver = "3"
-members = [".", "examples/gicv2"]
+members = [".", "examples/gicv2", "examples/gicv3"]
