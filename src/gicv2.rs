@@ -224,6 +224,26 @@ impl GicV2<'_> {
             InterruptGroup::Group1 => field!(self.gicc, aeoir).write(intid.0),
         }
     }
+
+    /// Handles the highest priority signalled interrupt in the given closure.
+    ///
+    /// The interrupt is ended automatically when the closure returns, and true
+    /// is returned to indicate the interrupt was handled.
+    ///
+    /// If no interrupt is pending, the closure is not called and false is
+    /// returned.
+    pub fn handle_interrupt<F>(&mut self, group: InterruptGroup, f: F) -> bool
+    where
+        F: FnOnce(IntId),
+    {
+        if let Some(intid) = self.get_and_acknowledge_interrupt(group) {
+            f(intid);
+            self.end_interrupt(intid, group);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// The target specification for a software-generated interrupt.

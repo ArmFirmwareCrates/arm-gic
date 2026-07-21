@@ -117,24 +117,21 @@ struct Exceptions;
 impl ExceptionHandlers for Exceptions {
     extern "C" fn irq_current(_: RegisterStateRef) {
         let mut gic = GIC.get().unwrap().lock();
-
-        let int_id = gic
-            .get_and_acknowledge_interrupt(InterruptGroup::Group0)
-            .unwrap();
-        gic.end_interrupt(int_id, InterruptGroup::Group0);
-        if int_id == TIMER_IRQID {
-            let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-            if counter < 4 {
-                log::info!("tick");
-                // Re-enable
-                EL1PhysicalTimer::enable();
+        gic.handle_interrupt(InterruptGroup::Group0, |int_id| {
+            if int_id == TIMER_IRQID {
+                let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
+                if counter < 4 {
+                    log::info!("tick");
+                    // Re-enable
+                    EL1PhysicalTimer::enable();
+                } else {
+                    // Mask interrupt and disable timer
+                    EL1PhysicalTimer::disable();
+                }
             } else {
-                // Mask interrupt and disable timer
-                EL1PhysicalTimer::disable();
+                log::error!("unexpected int_id: {int_id:?}");
             }
-        } else {
-            log::error!("unexpected int_id: {int_id:?}");
-        }
+        });
     }
 }
 
