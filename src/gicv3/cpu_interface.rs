@@ -104,6 +104,26 @@ impl GicCpuInterface {
         }
     }
 
+    /// Handles the highest priority signalled interrupt in the given closure.
+    ///
+    /// The interrupt is ended automatically when the closure returns, and true
+    /// is returned to indicate the interrupt was handled.
+    ///
+    /// If no interrupt is pending, the closure is not called and false is
+    /// returned.
+    pub fn handle_interrupt<F>(group: InterruptGroup, f: F) -> bool
+    where
+        F: FnOnce(IntId),
+    {
+        if let Some(intid) = Self::get_and_acknowledge_interrupt(group) {
+            f(intid);
+            Self::end_interrupt(intid, group);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Sends a group `group` software-generated interrupt (SGI) to the given cores.
     pub fn send_sgi(
         intid: IntId,
@@ -334,6 +354,29 @@ mod tests {
 
         GicCpuInterface::end_interrupt(IntId::ppi(15), InterruptGroup::Group1);
         assert_eq!(IccEoir1El1::from_bits_retain(31), read_reg!(icc_eoir1_el1));
+    }
+
+    #[test]
+    fn handle_interrupt() {
+        clear_regs();
+
+        let mut worked = false;
+        write_reg!(icc_iar0_el1, IccIar0El1::from_bits_retain(32));
+        let run = GicCpuInterface::handle_interrupt(InterruptGroup::Group0, |int_id| {
+            worked = int_id == IntId::spi(0);
+        });
+        assert_eq!(IccEoir0El1::from_bits_retain(32), read_reg!(icc_eoir0_el1));
+        assert!(run);
+        assert!(worked);
+
+        let mut worked = false;
+        write_reg!(icc_iar1_el1, IccIar1El1::from_bits_retain(31));
+        let run = GicCpuInterface::handle_interrupt(InterruptGroup::Group1, |int_id| {
+            worked = int_id == IntId::ppi(15);
+        });
+        assert_eq!(IccEoir1El1::from_bits_retain(31), read_reg!(icc_eoir1_el1));
+        assert!(run);
+        assert!(worked);
     }
 
     #[test]
