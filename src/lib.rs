@@ -61,6 +61,8 @@ pub mod gicv3;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 mod sysreg;
 
+#[cfg(any(test, feature = "fakes"))]
+use arm_sysregs::{Daif, write_daif};
 #[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
 use core::arch::asm;
 use core::fmt::{self, Debug, Formatter};
@@ -355,7 +357,12 @@ pub fn irq_disable() {
 
 /// Disables debug, SError, IRQ and FIQ exceptions.
 #[cfg(any(test, feature = "fakes"))]
-pub fn irq_disable() {}
+pub fn irq_disable() {
+    // SAFETY: This is writing to the fake system register so has no side-effects.
+    unsafe {
+        write_daif(Daif::D | Daif::A | Daif::I | Daif::F);
+    }
+}
 
 /// Enables debug, SError, IRQ and FIQ exceptions.
 #[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
@@ -368,7 +375,12 @@ pub fn irq_enable() {
 
 /// Enables debug, SError, IRQ and FIQ exceptions.
 #[cfg(any(test, feature = "fakes"))]
-pub fn irq_enable() {}
+pub fn irq_enable() {
+    // SAFETY: This is writing to the fake system register so has no side-effects.
+    unsafe {
+        write_daif(Daif::empty());
+    }
+}
 
 /// Waits for an interrupt.
 #[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
