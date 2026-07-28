@@ -3,28 +3,27 @@
 
 use crate::IntId;
 
+use arm_sysregs::{IccAsgi1r, IccEoir0, IccEoir0El1, IccEoir1, IccSgi0r, IccSgi0rEl1, IccSgi1r};
 #[cfg(all(not(any(test, feature = "fakes")), target_arch = "arm"))]
 pub use arm_sysregs::{
-    IccAsgi1r as IccAsgi1rEl1, IccCtlr as IccCtlrEl1, IccEoir0 as IccEoir0El1,
-    IccEoir1 as IccEoir1El1, IccIgrpen0 as IccIgrpen0El1, IccIgrpen1 as IccIgrpen1El1,
-    IccPmr as IccPmrEl1, IccSgi0r as IccSgi0rEl1, IccSgi1r as IccSgi1rEl1, IccSre as IccSreEl1,
-    read_icc_hppir0 as read_icc_hppir0_el1, read_icc_hppir1 as read_icc_hppir1_el1,
-    read_icc_iar0 as read_icc_iar0_el1, read_icc_iar1 as read_icc_iar1_el1,
-    read_icc_pmr as read_icc_pmr_el1, read_icc_sre as read_icc_sre_el1,
-    write_icc_asgi1r as write_icc_asgi1r_el1, write_icc_ctlr as write_icc_ctlr_el1,
-    write_icc_eoir0 as write_icc_eoir0_el1, write_icc_eoir1 as write_icc_eoir1_el1,
-    write_icc_igrpen0 as write_icc_igrpen0_el1, write_icc_igrpen1 as write_icc_igrpen1_el1,
-    write_icc_pmr as write_icc_pmr_el1, write_icc_sgi0r as write_icc_sgi0r_el1,
-    write_icc_sgi1r as write_icc_sgi1r_el1, write_icc_sre as write_icc_sre_el1,
+    IccCtlr as IccCtlrEl1, IccIgrpen0 as IccIgrpen0El1, IccIgrpen1 as IccIgrpen1El1,
+    IccPmr as IccPmrEl1, IccSre as IccSreEl1, read_icc_hppir0 as read_icc_hppir0_el1,
+    read_icc_hppir1 as read_icc_hppir1_el1, read_icc_iar0 as read_icc_iar0_el1,
+    read_icc_iar1 as read_icc_iar1_el1, read_icc_pmr as read_icc_pmr_el1,
+    read_icc_sre as read_icc_sre_el1, write_icc_asgi1r as write_icc_asgi1r_el1,
+    write_icc_ctlr as write_icc_ctlr_el1, write_icc_eoir0 as write_icc_eoir0_el1,
+    write_icc_eoir1 as write_icc_eoir1_el1, write_icc_igrpen0 as write_icc_igrpen0_el1,
+    write_icc_igrpen1 as write_icc_igrpen1_el1, write_icc_pmr as write_icc_pmr_el1,
+    write_icc_sgi0r as write_icc_sgi0r_el1, write_icc_sgi1r as write_icc_sgi1r_el1,
+    write_icc_sre as write_icc_sre_el1,
 };
 #[cfg(any(test, feature = "fakes", not(target_arch = "arm")))]
 pub use arm_sysregs::{
-    IccAsgi1rEl1, IccCtlrEl1, IccEoir0El1, IccEoir1El1, IccIgrpen0El1, IccIgrpen1El1, IccPmrEl1,
-    IccSgi0rEl1, IccSgi1rEl1, IccSreEl1, read_icc_hppir0_el1, read_icc_hppir1_el1,
-    read_icc_iar0_el1, read_icc_iar1_el1, read_icc_pmr_el1, read_icc_sre_el1, write_icc_asgi1r_el1,
-    write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1, write_icc_igrpen0_el1,
-    write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1, write_icc_sgi1r_el1,
-    write_icc_sre_el1,
+    IccCtlrEl1, IccIgrpen0El1, IccIgrpen1El1, IccPmrEl1, IccSreEl1, read_icc_hppir0_el1,
+    read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1, read_icc_pmr_el1, read_icc_sre_el1,
+    write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
+    write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1,
+    write_icc_sgi1r_el1, write_icc_sre_el1,
 };
 #[cfg(all(
     not(any(test, feature = "fakes")),
@@ -116,13 +115,19 @@ impl From<Sgir> for IccSgi0rEl1 {
     }
 }
 
-impl From<Sgir> for IccSgi1rEl1 {
+impl From<Sgir> for IccSgi0r {
     fn from(value: Sgir) -> Self {
         Self::from_bits_retain(value.0)
     }
 }
 
-impl From<Sgir> for IccAsgi1rEl1 {
+impl From<Sgir> for IccSgi1r {
+    fn from(value: Sgir) -> Self {
+        Self::from_bits_retain(value.0)
+    }
+}
+
+impl From<Sgir> for IccAsgi1r {
     fn from(value: Sgir) -> Self {
         Self::from_bits_retain(value.0)
     }
@@ -136,7 +141,15 @@ impl From<IntId> for IccEoir0El1 {
     }
 }
 
-impl From<IntId> for IccEoir1El1 {
+impl From<IntId> for IccEoir0 {
+    fn from(intid: IntId) -> Self {
+        let mut value = Self::empty();
+        value.set_intid(intid.0);
+        value
+    }
+}
+
+impl From<IntId> for IccEoir1 {
     fn from(intid: IntId) -> Self {
         let mut value = Self::empty();
         value.set_intid(intid.0);
