@@ -61,14 +61,13 @@ pub mod gicv3;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 mod sysreg;
 
+#[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
+use core::arch::asm;
+use core::fmt::{self, Debug, Formatter};
 pub use safe_mmio::UniqueMmioPointer;
 use safe_mmio::fields::ReadPureWrite;
 use thiserror::Error;
 use zerocopy::{FromZeros, Immutable, IntoBytes, KnownLayout};
-
-#[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
-use core::arch::asm;
-use core::fmt::{self, Debug, Formatter};
 
 /// The trigger configuration for an interrupt.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -346,7 +345,7 @@ impl TryFrom<u32> for IntId {
 }
 
 /// Disables debug, SError, IRQ and FIQ exceptions.
-#[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
+#[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
 pub fn irq_disable() {
     // SAFETY: Writing to this system register doesn't access memory in any way.
     unsafe {
@@ -359,7 +358,7 @@ pub fn irq_disable() {
 pub fn irq_disable() {}
 
 /// Enables debug, SError, IRQ and FIQ exceptions.
-#[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
+#[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
 pub fn irq_enable() {
     // SAFETY: Writing to this system register doesn't access memory in any way.
     unsafe {
@@ -372,7 +371,7 @@ pub fn irq_enable() {
 pub fn irq_enable() {}
 
 /// Waits for an interrupt.
-#[cfg(all(target_arch = "aarch64", not(feature = "fakes")))]
+#[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
 pub fn wfi() {
     // SAFETY: This doesn't access memory in any way.
     unsafe {

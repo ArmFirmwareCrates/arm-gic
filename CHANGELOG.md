@@ -15,6 +15,10 @@
 - Added `GicDistributor::pidr2()` and `GicRedistributor::pidr2()` methods.
 - Added example use of `GicV3` with QEMU's `virt` machine under `examples/`.
 
+### Bugfixes
+
+- Fixed test build on aarch64 hosts.
+
 ## 0.8.1
 
 ### Improvements
