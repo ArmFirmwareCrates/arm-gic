@@ -203,7 +203,7 @@ fn main(x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
         // Initialise the GIC.
 
         // SAFETY: QEMU virt machine bootloader passes DTB pointer via x0 register.
-        gic = unsafe { GicV3::new(gicd, gicr, 1, false) };
+        gic = unsafe { GicV3::new(gicd, gicr, 1).unwrap() };
         gic.setup(0);
 
         GicCpuInterface::set_priority_mask(0xff);
