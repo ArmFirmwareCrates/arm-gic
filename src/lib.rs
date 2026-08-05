@@ -62,7 +62,7 @@ pub mod gicv3;
 mod sysreg;
 
 #[cfg(any(test, feature = "fakes"))]
-use arm_sysregs::{Daif, write_daif};
+use arm_sysregs::el0::{accessors::write_daif, registers::Daif};
 #[cfg(all(target_arch = "aarch64", not(any(test, feature = "fakes"))))]
 use core::arch::asm;
 use core::fmt::{self, Debug, Formatter};

@@ -364,7 +364,7 @@ pub enum SgiTargetGroup {
 mod tests {
     use super::*;
     use crate::sysreg::{IccIgrpen1El1, IccSreEl1};
-    use arm_sysregs::fake::SYSREGS;
+    use arm_sysregs::el1::fake::SYSREGS;
     use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, transmute_mut};
 
     #[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]

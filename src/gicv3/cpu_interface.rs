@@ -239,23 +239,34 @@ impl GicCpuInterface {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arm_sysregs::{
-        IccEoir0El1, IccEoir1El1, IccHppir0El1, IccHppir1El1, IccIar0El1, IccIar1El1, fake::SYSREGS,
+    use arm_sysregs::el1::{
+        fake::SYSREGS as EL1_SYSREGS,
+        registers::{IccEoir0El1, IccEoir1El1, IccHppir0El1, IccHppir1El1, IccIar0El1, IccIar1El1},
     };
+    #[cfg(feature = "el2")]
+    use arm_sysregs::el2::fake::SYSREGS as EL2_SYSREGS;
+    #[cfg(feature = "el3")]
+    use arm_sysregs::el3::fake::SYSREGS as EL3_SYSREGS;
 
     fn clear_regs() {
-        SYSREGS.lock().unwrap().reset();
+        EL1_SYSREGS.lock().unwrap().reset();
+
+        #[cfg(feature = "el2")]
+        EL2_SYSREGS.lock().unwrap().reset();
+
+        #[cfg(feature = "el3")]
+        EL3_SYSREGS.lock().unwrap().reset();
     }
 
     macro_rules! read_reg {
-        ($reg:ident) => {
-            SYSREGS.lock().unwrap().$reg
+        ($reg:ident, $sysregs:expr) => {
+            $sysregs.lock().unwrap().$reg
         };
     }
 
     macro_rules! write_reg {
-        ($reg:ident, $value:expr) => {
-            SYSREGS.lock().unwrap().$reg = $value;
+        ($reg:ident, $sysregs:expr, $value:expr) => {
+            $sysregs.lock().unwrap().$reg = $value;
         };
     }
 
@@ -264,10 +275,10 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::enable_group0(true);
-        assert_eq!(0x0000_0001, read_reg!(icc_igrpen0_el1).bits());
+        assert_eq!(0x0000_0001, read_reg!(icc_igrpen0_el1, EL1_SYSREGS).bits());
 
         GicCpuInterface::enable_group0(false);
-        assert_eq!(0x0000_0000, read_reg!(icc_igrpen0_el1).bits());
+        assert_eq!(0x0000_0000, read_reg!(icc_igrpen0_el1, EL1_SYSREGS).bits());
     }
 
     #[test]
@@ -275,10 +286,10 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::enable_group1(true);
-        assert_eq!(0x0000_0001, read_reg!(icc_igrpen1_el1).bits());
+        assert_eq!(0x0000_0001, read_reg!(icc_igrpen1_el1, EL1_SYSREGS).bits());
 
         GicCpuInterface::enable_group1(false);
-        assert_eq!(0x0000_0000, read_reg!(icc_igrpen1_el1).bits());
+        assert_eq!(0x0000_0000, read_reg!(icc_igrpen1_el1, EL1_SYSREGS).bits());
     }
 
     #[cfg(feature = "el3")]
@@ -287,35 +298,47 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::enable_group1_secure(true);
-        assert_eq!(0x0000_0002, read_reg!(icc_igrpen1_el3).bits());
+        assert_eq!(0x0000_0002, read_reg!(icc_igrpen1_el3, EL3_SYSREGS).bits());
 
         GicCpuInterface::enable_group1_non_secure(true);
-        assert_eq!(0x0000_0003, read_reg!(icc_igrpen1_el3).bits());
+        assert_eq!(0x0000_0003, read_reg!(icc_igrpen1_el3, EL3_SYSREGS).bits());
 
         GicCpuInterface::enable_group1_secure(false);
-        assert_eq!(0x0000_0001, read_reg!(icc_igrpen1_el3).bits());
+        assert_eq!(0x0000_0001, read_reg!(icc_igrpen1_el3, EL3_SYSREGS).bits());
 
         GicCpuInterface::enable_group1_non_secure(false);
-        assert_eq!(0x0000_0000, read_reg!(icc_igrpen1_el3).bits());
+        assert_eq!(0x0000_0000, read_reg!(icc_igrpen1_el3, EL3_SYSREGS).bits());
     }
 
     #[test]
     fn get_pending_interrupt() {
         clear_regs();
 
-        write_reg!(icc_hppir0_el1, IccHppir0El1::from_bits_retain(1));
+        write_reg!(
+            icc_hppir0_el1,
+            EL1_SYSREGS,
+            IccHppir0El1::from_bits_retain(1)
+        );
         assert_eq!(
             Some(IntId::sgi(1)),
             GicCpuInterface::get_pending_interrupt(InterruptGroup::Group0)
         );
 
-        write_reg!(icc_hppir1_el1, IccHppir1El1::from_bits_retain(16));
+        write_reg!(
+            icc_hppir1_el1,
+            EL1_SYSREGS,
+            IccHppir1El1::from_bits_retain(16)
+        );
         assert_eq!(
             Some(IntId::ppi(0)),
             GicCpuInterface::get_pending_interrupt(InterruptGroup::Group1)
         );
 
-        write_reg!(icc_hppir0_el1, IccHppir0El1::from_bits_retain(1023));
+        write_reg!(
+            icc_hppir0_el1,
+            EL1_SYSREGS,
+            IccHppir0El1::from_bits_retain(1023)
+        );
         assert_eq!(
             None,
             GicCpuInterface::get_pending_interrupt(InterruptGroup::Group0)
@@ -326,19 +349,23 @@ mod tests {
     fn get_and_acknowledge_interrupt() {
         clear_regs();
 
-        write_reg!(icc_iar0_el1, IccIar0El1::from_bits_retain(32));
+        write_reg!(icc_iar0_el1, EL1_SYSREGS, IccIar0El1::from_bits_retain(32));
         assert_eq!(
             Some(IntId::spi(0)),
             GicCpuInterface::get_and_acknowledge_interrupt(InterruptGroup::Group0)
         );
 
-        write_reg!(icc_iar1_el1, IccIar1El1::from_bits_retain(64));
+        write_reg!(icc_iar1_el1, EL1_SYSREGS, IccIar1El1::from_bits_retain(64));
         assert_eq!(
             Some(IntId::spi(32)),
             GicCpuInterface::get_and_acknowledge_interrupt(InterruptGroup::Group1)
         );
 
-        write_reg!(icc_iar0_el1, IccIar0El1::from_bits_retain(1023));
+        write_reg!(
+            icc_iar0_el1,
+            EL1_SYSREGS,
+            IccIar0El1::from_bits_retain(1023)
+        );
         assert_eq!(
             None,
             GicCpuInterface::get_and_acknowledge_interrupt(InterruptGroup::Group0)
@@ -350,10 +377,16 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::end_interrupt(IntId::sgi(15), InterruptGroup::Group0);
-        assert_eq!(IccEoir0El1::from_bits_retain(15), read_reg!(icc_eoir0_el1));
+        assert_eq!(
+            IccEoir0El1::from_bits_retain(15),
+            read_reg!(icc_eoir0_el1, EL1_SYSREGS)
+        );
 
         GicCpuInterface::end_interrupt(IntId::ppi(15), InterruptGroup::Group1);
-        assert_eq!(IccEoir1El1::from_bits_retain(31), read_reg!(icc_eoir1_el1));
+        assert_eq!(
+            IccEoir1El1::from_bits_retain(31),
+            read_reg!(icc_eoir1_el1, EL1_SYSREGS)
+        );
     }
 
     #[test]
@@ -361,20 +394,26 @@ mod tests {
         clear_regs();
 
         let mut worked = false;
-        write_reg!(icc_iar0_el1, IccIar0El1::from_bits_retain(32));
+        write_reg!(icc_iar0_el1, EL1_SYSREGS, IccIar0El1::from_bits_retain(32));
         let run = GicCpuInterface::handle_interrupt(InterruptGroup::Group0, |int_id| {
             worked = int_id == IntId::spi(0);
         });
-        assert_eq!(IccEoir0El1::from_bits_retain(32), read_reg!(icc_eoir0_el1));
+        assert_eq!(
+            IccEoir0El1::from_bits_retain(32),
+            read_reg!(icc_eoir0_el1, EL1_SYSREGS)
+        );
         assert!(run);
         assert!(worked);
 
         let mut worked = false;
-        write_reg!(icc_iar1_el1, IccIar1El1::from_bits_retain(31));
+        write_reg!(icc_iar1_el1, EL1_SYSREGS, IccIar1El1::from_bits_retain(31));
         let run = GicCpuInterface::handle_interrupt(InterruptGroup::Group1, |int_id| {
             worked = int_id == IntId::ppi(15);
         });
-        assert_eq!(IccEoir1El1::from_bits_retain(31), read_reg!(icc_eoir1_el1));
+        assert_eq!(
+            IccEoir1El1::from_bits_retain(31),
+            read_reg!(icc_eoir1_el1, EL1_SYSREGS)
+        );
         assert!(run);
         assert!(worked);
     }
@@ -387,7 +426,10 @@ mod tests {
             Ok(()),
             GicCpuInterface::send_sgi(IntId::sgi(2), SgiTarget::All, SgiTargetGroup::Group0)
         );
-        assert_eq!(0x0000_0100_0200_0000, read_reg!(icc_sgi0r_el1).bits());
+        assert_eq!(
+            0x0000_0100_0200_0000,
+            read_reg!(icc_sgi0r_el1, EL1_SYSREGS).bits()
+        );
 
         assert_eq!(
             Ok(()),
@@ -402,13 +444,19 @@ mod tests {
                 SgiTargetGroup::CurrentGroup1,
             )
         );
-        assert_eq!(0x00ab_00cd_03ef_5a5b, read_reg!(icc_sgi1r_el1).bits());
+        assert_eq!(
+            0x00ab_00cd_03ef_5a5b,
+            read_reg!(icc_sgi1r_el1, EL1_SYSREGS).bits()
+        );
 
         assert_eq!(
             Ok(()),
             GicCpuInterface::send_sgi(IntId::sgi(4), SgiTarget::All, SgiTargetGroup::OtherGroup1)
         );
-        assert_eq!(0x0000_0100_0400_0000, read_reg!(icc_asgi1r_el1).bits());
+        assert_eq!(
+            0x0000_0100_0400_0000,
+            read_reg!(icc_asgi1r_el1, EL1_SYSREGS).bits()
+        );
 
         assert_eq!(
             Err(GicError::InvalidGicCpuIntid(IntId::spi(0))),
@@ -429,7 +477,7 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::enable_system_register_el1();
-        assert_eq!(0x0000_0001, read_reg!(icc_sre_el1).bits());
+        assert_eq!(0x0000_0001, read_reg!(icc_sre_el1, EL1_SYSREGS).bits());
     }
 
     #[cfg(feature = "el2")]
@@ -438,10 +486,10 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::enable_system_register_el2(false);
-        assert_eq!(0x0000_0001, read_reg!(icc_sre_el2).bits());
+        assert_eq!(0x0000_0001, read_reg!(icc_sre_el2, EL2_SYSREGS).bits());
 
         GicCpuInterface::enable_system_register_el2(true);
-        assert_eq!(0x0000_0009, read_reg!(icc_sre_el2).bits());
+        assert_eq!(0x0000_0009, read_reg!(icc_sre_el2, EL2_SYSREGS).bits());
     }
 
     #[cfg(feature = "el3")]
@@ -450,10 +498,10 @@ mod tests {
         clear_regs();
 
         GicCpuInterface::enable_system_register_el3(false);
-        assert_eq!(0x0000_0001, read_reg!(icc_sre_el3).bits());
+        assert_eq!(0x0000_0001, read_reg!(icc_sre_el3, EL3_SYSREGS).bits());
 
         GicCpuInterface::enable_system_register_el3(true);
-        assert_eq!(0x0000_0009, read_reg!(icc_sre_el3).bits());
+        assert_eq!(0x0000_0009, read_reg!(icc_sre_el3, EL3_SYSREGS).bits());
     }
 
     #[test]

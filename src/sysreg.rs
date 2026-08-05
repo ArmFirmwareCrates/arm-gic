@@ -3,59 +3,74 @@
 
 use crate::IntId;
 
-use arm_sysregs::{IccAsgi1r, IccEoir0, IccEoir0El1, IccEoir1, IccSgi0r, IccSgi0rEl1, IccSgi1r};
 #[cfg(all(not(any(test, feature = "fakes")), target_arch = "arm"))]
-pub use arm_sysregs::{
-    IccCtlr as IccCtlrEl1, IccIgrpen0 as IccIgrpen0El1, IccIgrpen1 as IccIgrpen1El1,
-    IccPmr as IccPmrEl1, IccSre as IccSreEl1, read_icc_hppir0 as read_icc_hppir0_el1,
-    read_icc_hppir1 as read_icc_hppir1_el1, read_icc_iar0 as read_icc_iar0_el1,
-    read_icc_iar1 as read_icc_iar1_el1, read_icc_pmr as read_icc_pmr_el1,
-    read_icc_sre as read_icc_sre_el1, write_icc_asgi1r as write_icc_asgi1r_el1,
-    write_icc_ctlr as write_icc_ctlr_el1, write_icc_eoir0 as write_icc_eoir0_el1,
-    write_icc_eoir1 as write_icc_eoir1_el1, write_icc_igrpen0 as write_icc_igrpen0_el1,
-    write_icc_igrpen1 as write_icc_igrpen1_el1, write_icc_pmr as write_icc_pmr_el1,
-    write_icc_sgi0r as write_icc_sgi0r_el1, write_icc_sgi1r as write_icc_sgi1r_el1,
-    write_icc_sre as write_icc_sre_el1,
+pub use arm_sysregs::el1::{
+    accessors::{
+        read_icc_hppir0 as read_icc_hppir0_el1, read_icc_hppir1 as read_icc_hppir1_el1,
+        read_icc_iar0 as read_icc_iar0_el1, read_icc_iar1 as read_icc_iar1_el1,
+        read_icc_pmr as read_icc_pmr_el1, read_icc_sre as read_icc_sre_el1,
+        write_icc_asgi1r as write_icc_asgi1r_el1, write_icc_ctlr as write_icc_ctlr_el1,
+        write_icc_eoir0 as write_icc_eoir0_el1, write_icc_eoir1 as write_icc_eoir1_el1,
+        write_icc_igrpen0 as write_icc_igrpen0_el1, write_icc_igrpen1 as write_icc_igrpen1_el1,
+        write_icc_pmr as write_icc_pmr_el1, write_icc_sgi0r as write_icc_sgi0r_el1,
+        write_icc_sgi1r as write_icc_sgi1r_el1, write_icc_sre as write_icc_sre_el1,
+    },
+    registers::{
+        IccCtlr as IccCtlrEl1, IccIgrpen0 as IccIgrpen0El1, IccIgrpen1 as IccIgrpen1El1,
+        IccPmr as IccPmrEl1, IccSre as IccSreEl1,
+    },
 };
 #[cfg(any(test, feature = "fakes", not(target_arch = "arm")))]
-pub use arm_sysregs::{
-    IccCtlrEl1, IccIgrpen0El1, IccIgrpen1El1, IccPmrEl1, IccSreEl1, read_icc_hppir0_el1,
-    read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1, read_icc_pmr_el1, read_icc_sre_el1,
-    write_icc_asgi1r_el1, write_icc_ctlr_el1, write_icc_eoir0_el1, write_icc_eoir1_el1,
-    write_icc_igrpen0_el1, write_icc_igrpen1_el1, write_icc_pmr_el1, write_icc_sgi0r_el1,
-    write_icc_sgi1r_el1, write_icc_sre_el1,
+pub use arm_sysregs::el1::{
+    accessors::{
+        read_icc_hppir0_el1, read_icc_hppir1_el1, read_icc_iar0_el1, read_icc_iar1_el1,
+        read_icc_pmr_el1, read_icc_sre_el1, write_icc_asgi1r_el1, write_icc_ctlr_el1,
+        write_icc_eoir0_el1, write_icc_eoir1_el1, write_icc_igrpen0_el1, write_icc_igrpen1_el1,
+        write_icc_pmr_el1, write_icc_sgi0r_el1, write_icc_sgi1r_el1, write_icc_sre_el1,
+    },
+    registers::{IccCtlrEl1, IccIgrpen0El1, IccIgrpen1El1, IccPmrEl1, IccSreEl1},
 };
 #[cfg(all(
     not(any(test, feature = "fakes")),
     target_arch = "arm",
     feature = "el2"
 ))]
-pub use arm_sysregs::{
-    IccHsre as IccSreEl2, read_icc_hsre as read_icc_sre_el2, write_icc_hsre as write_icc_sre_el2,
+pub use arm_sysregs::el2::{
+    accessors::{read_icc_hsre as read_icc_sre_el2, write_icc_hsre as write_icc_sre_el2},
+    registers::IccHsre as IccSreEl2,
+};
+#[cfg(all(
+    any(test, feature = "fakes", not(target_arch = "arm")),
+    feature = "el2"
+))]
+pub use arm_sysregs::el2::{
+    accessors::{read_icc_sre_el2, write_icc_sre_el2},
+    registers::IccSreEl2,
 };
 #[cfg(all(
     any(test, feature = "fakes", not(target_arch = "arm")),
     feature = "el3"
 ))]
-pub use arm_sysregs::{
-    IccIgrpen1El3, IccSreEl3, read_icc_igrpen1_el3, read_icc_sre_el3, write_icc_igrpen1_el3,
-    write_icc_sre_el3,
+pub use arm_sysregs::el3::{
+    accessors::{read_icc_igrpen1_el3, read_icc_sre_el3, write_icc_igrpen1_el3, write_icc_sre_el3},
+    registers::{IccIgrpen1El3, IccSreEl3},
 };
 #[cfg(all(
     not(any(test, feature = "fakes")),
     target_arch = "arm",
     feature = "el3"
 ))]
-pub use arm_sysregs::{
-    IccMgrpen1 as IccIgrpen1El3, IccMsre as IccSreEl3, read_icc_mgrpen1 as read_icc_igrpen1_el3,
-    read_icc_msre as read_icc_sre_el3, write_icc_mgrpen1 as write_icc_igrpen1_el3,
-    write_icc_msre as write_icc_sre_el3,
+pub use arm_sysregs::el3::{
+    accessors::{
+        read_icc_mgrpen1 as read_icc_igrpen1_el3, read_icc_msre as read_icc_sre_el3,
+        write_icc_mgrpen1 as write_icc_igrpen1_el3, write_icc_msre as write_icc_sre_el3,
+    },
+    registers::{IccMgrpen1 as IccIgrpen1El3, IccMsre as IccSreEl3},
 };
-#[cfg(all(
-    any(test, feature = "fakes", not(target_arch = "arm")),
-    feature = "el2"
-))]
-pub use arm_sysregs::{IccSreEl2, read_icc_sre_el2, write_icc_sre_el2};
+use arm_sysregs::{
+    aarch32::registers::{IccAsgi1r, IccEoir0, IccEoir1, IccSgi0r, IccSgi1r},
+    el1::registers::{IccEoir0El1, IccSgi0rEl1},
+};
 
 /// Software Generated Interrupt Group Register.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
