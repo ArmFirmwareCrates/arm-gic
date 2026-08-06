@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 aarch64-rt = { version = "0.4.3", default-features = false, features = ["el1", "exceptions", "psci"] }
 arm-gic = { path = "../.." }
-log = "0.4.22"
+log = "0.4.32"
 arm-pl011-uart = "0.5"
 flat_device_tree = "3.1.1"
 smccc = "0.2.2"
