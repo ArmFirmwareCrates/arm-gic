@@ -8,7 +8,7 @@ use crate::{
         registers::{GicrCtlr, GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Pidr2, Sgi, Waker},
         set_regs,
     },
-    set_bit,
+    set_bit, write_bit,
 };
 use core::{hint::spin_loop, marker::PhantomData, ops::Range, ptr::NonNull, stringify};
 use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};
@@ -401,9 +401,9 @@ impl<'a> GicRedistributor<'a> {
         let mut sgi = field!(self.regs, sgi);
 
         if enable {
-            set_bit(field!(sgi, isenabler), index);
+            write_bit(field!(sgi, isenabler), index);
         } else {
-            set_bit(field!(sgi, icenabler), index);
+            write_bit(field!(sgi, icenabler), index);
         }
 
         Ok(())
@@ -1095,17 +1095,37 @@ mod tests {
             regs.clear();
         }
 
-        let mut redistributor = regs.redistributor_for_test();
-        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(0), true));
-        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(1), true));
-        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(3), true));
-        assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(3), false));
-        assert_eq!(
-            Err(GicError::InvalidGicrIntid(IntId::spi(0))),
-            redistributor.enable_interrupt(IntId::spi(0), false)
-        );
-        assert_eq!(0x0000_000b, regs.reg_read(0x1_0100));
+        {
+            let mut redistributor = regs.redistributor_for_test();
+            assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(0), true));
+        }
+        assert_eq!(0x0000_0001, regs.reg_read(0x1_0100));
+
+        {
+            let mut redistributor = regs.redistributor_for_test();
+            assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(1), true));
+        }
+        assert_eq!(0x0000_0002, regs.reg_read(0x1_0100));
+
+        {
+            let mut redistributor = regs.redistributor_for_test();
+            assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(3), true));
+        }
+        assert_eq!(0x0000_0008, regs.reg_read(0x1_0100));
+
+        {
+            let mut redistributor = regs.redistributor_for_test();
+            assert_eq!(Ok(()), redistributor.enable_interrupt(IntId::sgi(3), false));
+        }
         assert_eq!(0x0000_0008, regs.reg_read(0x1_0180));
+
+        {
+            let mut redistributor = regs.redistributor_for_test();
+            assert_eq!(
+                Err(GicError::InvalidGicrIntid(IntId::spi(0))),
+                redistributor.enable_interrupt(IntId::spi(0), false)
+            );
+        }
     }
 
     #[test]

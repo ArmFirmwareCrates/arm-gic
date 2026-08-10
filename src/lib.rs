@@ -428,3 +428,16 @@ fn set_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>
 fn clear_bit<const N: usize>(registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>, nth: usize) {
     modify_bit(registers, nth, false);
 }
+
+/// Directly writes `nth` bit of memory pointed by `registers` without a read-modify-write.
+/// Intended strictly for Write-to-Set and Write-to-Clear registers (e.g. ICENABLER).
+fn write_bit<const N: usize>(
+    mut registers: UniqueMmioPointer<[ReadPureWrite<u32>; N]>,
+    nth: usize,
+) {
+    let reg_num: usize = nth / 32;
+    let bit_num: usize = nth % 32;
+    let mut reg_ptr = registers.get(reg_num).unwrap();
+
+    reg_ptr.write(1 << bit_num);
+}

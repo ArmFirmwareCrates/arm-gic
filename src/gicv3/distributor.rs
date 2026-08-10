@@ -8,7 +8,7 @@ use crate::{
         registers::{Gicd, GicdCtlr, Pidr2, Typer},
         set_regs,
     },
-    set_bit,
+    set_bit, write_bit,
 };
 use core::{hint::spin_loop, ops::Range};
 use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};
@@ -512,10 +512,10 @@ impl<'a> GicDistributor<'a> {
     pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) -> Result<(), GicError> {
         if enable {
             let (registers, index) = select_regs!(self.regs, isenabler, isenabler_e, intid)?;
-            set_bit(registers, index);
+            write_bit(registers, index);
         } else {
             let (registers, index) = select_regs!(self.regs, icenabler, icenabler_e, intid)?;
-            set_bit(registers, index);
+            write_bit(registers, index);
         }
 
         Ok(())
@@ -1350,17 +1350,37 @@ mod tests {
             regs.clear();
         }
 
-        let mut distributor = regs.distributor_for_test();
-        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(0), true));
-        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(1), true));
-        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(3), true));
-        assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(3), false));
-        assert_eq!(
-            Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
-            distributor.enable_interrupt(IntId::SPECIAL_NONSECURE, false)
-        );
-        assert_eq!(0x0000_000b, regs.reg_read(0x0100));
+        {
+            let mut distributor = regs.distributor_for_test();
+            assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(0), true));
+        }
+        assert_eq!(0x0000_0001, regs.reg_read(0x0100));
+
+        {
+            let mut distributor = regs.distributor_for_test();
+            assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(1), true));
+        }
+        assert_eq!(0x0000_0002, regs.reg_read(0x0100));
+
+        {
+            let mut distributor = regs.distributor_for_test();
+            assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(3), true));
+        }
+        assert_eq!(0x0000_0008, regs.reg_read(0x0100));
+
+        {
+            let mut distributor = regs.distributor_for_test();
+            assert_eq!(Ok(()), distributor.enable_interrupt(IntId::sgi(3), false));
+        }
         assert_eq!(0x0000_0008, regs.reg_read(0x0180));
+
+        {
+            let mut distributor = regs.distributor_for_test();
+            assert_eq!(
+                Err(GicError::InvalidGicdIntid(IntId::SPECIAL_NONSECURE)),
+                distributor.enable_interrupt(IntId::SPECIAL_NONSECURE, false)
+            );
+        }
     }
 
     #[test]
