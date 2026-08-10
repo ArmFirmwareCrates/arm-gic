@@ -1,6 +1,6 @@
 # Changelog
 
-## Future
+## 0.9.0
 
 ### Breaking changes
 
@@ -18,7 +18,10 @@
 ### Bugfixes
 
 - Fixed test build on aarch64 hosts.
-- Fixed an issue where `enable_interrupt(false)` on GICv3 inadvertently dropped all active interrupts on the same core by accidentally performing a destructive software read-modify-write on write-1-to-clear `ICENABLER`/`ISENABLER` registers. The methods now correctly use atomic direct writes natively, adhering to the GIC architectural specification.
+- Fixed an issue where `enable_interrupt(false)` on GICv3 inadvertently dropped all active
+  interrupts on the same core by accidentally performing a destructive software read-modify-write on
+  write-1-to-clear `ICENABLER`/`ISENABLER` registers. The methods now correctly use atomic direct
+  writes natively, adhering to the GIC architectural specification.
 
 ## 0.8.1
 
