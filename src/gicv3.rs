@@ -12,15 +12,15 @@ pub mod registers;
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 use crate::sysreg::{IccCtlrEl1, write_icc_ctlr_el1};
 use crate::{IntId, Trigger, gicv3::redistributor::get_redistributor_frame_count};
-use core::ptr::NonNull;
+use core::{ops::Range, ptr::NonNull};
 #[cfg(any(test, feature = "fakes", target_arch = "aarch64", target_arch = "arm"))]
 pub use cpu_interface::GicCpuInterface;
 pub use distributor::{GicDistributor, GicDistributorContext};
 pub use redistributor::{GicRedistributor, GicRedistributorContext, GicRedistributorIterator};
 use registers::{Gicd, GicdCtlr, GicrSgi, GicrTyper, Typer};
-use safe_mmio::{UniqueMmioPointer, fields::ReadPureWrite};
+use safe_mmio::{SharedMmioPointer, UniqueMmioPointer, fields::ReadPureWrite};
 use thiserror::Error;
-use zerocopy::{Immutable, IntoBytes};
+use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 /// GICv3 error type.
 #[derive(Error, Debug, Clone, Copy, Eq, PartialEq)]
@@ -49,30 +49,61 @@ pub const HIGHEST_S_PRIORITY: u8 = 0x00;
 /// Highest priority value of Non-secure Group 1 interrupts.
 pub const HIGHEST_NS_PRIORITY: u8 = 0x80;
 
-/// Calculates the register count based on the interrupt count, bits used in the register per
-/// interrupt and the field's type.
-const fn register_count<T: ?Sized>(int_count: usize, bits_per_int: usize, field: &T) -> usize {
-    (int_count * bits_per_int).div_ceil(size_of_val(field) * 8)
+/// Helper for the below functions to determine the range of registers to operate on.
+const fn reg_range<T>(start_offset: usize, int_count: usize, bits_per_int: usize) -> Range<usize> {
+    let reg_start = (start_offset * bits_per_int).div_ceil(size_of::<T>() * 8);
+    let reg_end = ((start_offset + int_count) * bits_per_int).div_ceil(size_of::<T>() * 8);
+    reg_start..reg_end
 }
 
 /// Sets per-interrupt register values for a given interrupt count.
 ///
 /// The function iterates over a range of `regs` and writes `value` into each register. The range is
 /// determined based on `start_offset`, `int_count`, `bits_per_int` and the type of the registers.
-fn set_regs<T, const N: usize>(
+fn set_regs<T: Immutable + IntoBytes + Copy, const N: usize>(
     mut regs: UniqueMmioPointer<[ReadPureWrite<T>; N]>,
     start_offset: usize,
     int_count: usize,
     bits_per_int: usize,
     value: T,
-) where
-    T: Immutable + IntoBytes + Copy,
-{
-    let reg_start = register_count(start_offset, bits_per_int, &value);
-    let reg_end = register_count(start_offset + int_count, bits_per_int, &value);
-
-    for mut reg in regs.get_range(reg_start..reg_end).unwrap() {
+) {
+    for mut reg in regs
+        .get_range(reg_range::<T>(start_offset, int_count, bits_per_int))
+        .unwrap()
+    {
         reg.write(value);
+    }
+}
+
+/// Reads the registers and stores them in a context structure.
+///
+/// Saves each register from `reg` into `context`. The range is determined based on `start_offset`,
+/// `int_count`, `bits_per_int` and the type of the registers.
+fn save_regs<T: Default + FromBytes + IntoBytes + Copy, const N: usize>(
+    context: &mut [T],
+    reg: SharedMmioPointer<'_, [ReadPureWrite<T>; N]>,
+    start_offset: usize,
+    int_count: usize,
+    bits_per_int: usize,
+) {
+    for (dst, src) in reg_range::<T>(start_offset, int_count, bits_per_int).enumerate() {
+        context[dst] = reg.get(src).unwrap().read();
+    }
+}
+
+/// Restores the register values from a context structure.
+///
+/// Restores each register in `reg` from `context`. The range is determined based on `start_offset`,
+/// `int_count`, `bits_per_int` and the type of the registers.
+fn restore_regs<T: Default + Immutable + IntoBytes + Copy, const N: usize>(
+    context: &[T],
+    mut reg: UniqueMmioPointer<'_, [ReadPureWrite<T>; N]>,
+    start_offset: usize,
+    int_count: usize,
+    bits_per_int: usize,
+) {
+    for (src, dst) in reg_range::<T>(start_offset, int_count, bits_per_int).enumerate() {
+        reg.get(dst).unwrap().write(context[src]);
     }
 }
 

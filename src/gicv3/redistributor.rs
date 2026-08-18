@@ -4,9 +4,9 @@
 use crate::{
     IntId, Trigger, clear_bit,
     gicv3::{
-        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, register_count,
+        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup,
         registers::{GicrCtlr, GicrIidr, GicrPwrr, GicrSgi, GicrTyper, Pidr2, Sgi, Waker},
-        set_regs,
+        restore_regs, save_regs, set_regs,
     },
     set_bit, write_bit,
 };
@@ -34,34 +34,6 @@ macro_rules! restore_reg {
             .get($index)
             .unwrap()
             .write($context.$reg[$index]);
-    };
-}
-
-/// Reads the SGI/(E)PPI registers and stores them in a context structure.
-///
-/// The macro iterates over a range of `$regs.$reg` and saves each register into `$context`. The
-/// range is determined based on `$start_offset`, `$int_count`, `$bits_per_int` and the type of the
-/// registers.
-macro_rules! save_regs {
-    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
-        let reg_count = register_count($int_count, $bits_per_int, &$context[0]);
-        for i in 0..reg_count {
-            $context[i] = field_shared!($regs, $reg).get(i).unwrap().read();
-        }
-    };
-}
-
-/// Restores the SGI/(E)PPI register values from a context structure.
-///
-/// The macro iterates over a range of `$regs.$reg` and restores each register from `$context`. The
-/// range is determined based on `$start_offset`, `$int_count`, `$bits_per_int` and the type of the
-/// registers.
-macro_rules! restore_regs {
-    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
-        let reg_count = register_count($int_count, $bits_per_int, &$context[0]);
-        for i in 0..reg_count {
-            field!($regs, $reg).get(i).unwrap().write($context[i]);
-        }
     };
 }
 
@@ -414,17 +386,14 @@ impl<'a> GicRedistributor<'a> {
         let ppi_count = self.ppi_count();
 
         let mut sgi = field!(self.regs, sgi);
-        let mut regs = if enable {
+        let regs = if enable {
             field!(sgi, isenabler)
         } else {
             field!(sgi, icenabler)
         };
 
         assert_eq!(Sgi::ISENABLER_BITS, Sgi::ICENABLER_BITS);
-        let bits = 0xffff_ffff;
-        for i in 0..register_count(ppi_count, Sgi::ISENABLER_BITS, &bits) {
-            regs.get(i).unwrap().write(bits);
-        }
+        set_regs(regs, 0, ppi_count, Sgi::ISENABLER_BITS, 0xffff_ffff);
     }
 
     /// Restores the given GIC Redistributor register context.
@@ -472,56 +441,62 @@ impl<'a> GicRedistributor<'a> {
         // Restore SGI registers
         let mut sgi = field!(self.regs, sgi);
 
-        restore_regs!(
+        restore_regs(
             context.igroupr(),
-            sgi,
-            igroupr,
+            field!(sgi, igroupr),
+            0,
             ppi_count,
-            Sgi::IGROUPR_BITS
+            Sgi::IGROUPR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.igrpmodr(),
-            sgi,
-            igrpmodr,
+            field!(sgi, igrpmodr),
+            0,
             ppi_count,
-            Sgi::IGRPMODR_BITS
+            Sgi::IGRPMODR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.ipriorityr(),
-            sgi,
-            ipriorityr,
+            field!(sgi, ipriorityr),
+            0,
             ppi_count,
-            Sgi::IPRIORITY_BITS
+            Sgi::IPRIORITY_BITS,
         );
-        restore_regs!(context.icfgr(), sgi, icfgr, ppi_count, Sgi::ICFGR_BITS);
+        restore_regs(
+            context.icfgr(),
+            field!(sgi, icfgr),
+            0,
+            ppi_count,
+            Sgi::ICFGR_BITS,
+        );
         restore_reg!(context, sgi, nsacr);
 
         // Restore after group and priorities are set.
-        restore_regs!(
+        restore_regs(
             context.ispendr(),
-            sgi,
-            ispendr,
+            field!(sgi, ispendr),
+            0,
             ppi_count,
-            Sgi::ISPENDR_BITS
+            Sgi::ISPENDR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.isactiver(),
-            sgi,
-            isactiver,
+            field!(sgi, isactiver),
+            0,
             ppi_count,
-            Sgi::ISACTIVER_BITS
+            Sgi::ISACTIVER_BITS,
         );
 
         // Wait for all writes to the Distributor to complete before enabling the SGI and (E)PPIs.
         self.wait_for_upstream_pending_write();
 
         let mut sgi = field!(self.regs, sgi);
-        restore_regs!(
+        restore_regs(
             context.isenabler(),
-            sgi,
-            isenabler,
+            field!(sgi, isenabler),
+            0,
             ppi_count,
-            Sgi::ISENABLER_BITS
+            Sgi::ISENABLER_BITS,
         );
 
         // Restore GICR_CTLR.Enable_LPIs bit and wait for pending writes in case the first write to
@@ -554,48 +529,54 @@ impl<'a> GicRedistributor<'a> {
         let sgi = field_shared!(self.regs, sgi);
 
         save_reg!(context, sgi, nsacr);
-        save_regs!(
+        save_regs(
             context.igroupr_mut(),
-            sgi,
-            igroupr,
+            field_shared!(sgi, igroupr),
+            0,
             ppi_count,
-            Sgi::IGROUPR_BITS
+            Sgi::IGROUPR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.isenabler_mut(),
-            sgi,
-            isenabler,
+            field_shared!(sgi, isenabler),
+            0,
             ppi_count,
-            Sgi::ISENABLER_BITS
+            Sgi::ISENABLER_BITS,
         );
-        save_regs!(
+        save_regs(
             context.ispendr_mut(),
-            sgi,
-            ispendr,
+            field_shared!(sgi, ispendr),
+            0,
             ppi_count,
-            Sgi::ISPENDR_BITS
+            Sgi::ISPENDR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.isactiver_mut(),
-            sgi,
-            isactiver,
+            field_shared!(sgi, isactiver),
+            0,
             ppi_count,
-            Sgi::ISACTIVER_BITS
+            Sgi::ISACTIVER_BITS,
         );
-        save_regs!(
+        save_regs(
             context.igrpmodr_mut(),
-            sgi,
-            igrpmodr,
+            field_shared!(sgi, igrpmodr),
+            0,
             ppi_count,
-            Sgi::IGRPMODR_BITS
+            Sgi::IGRPMODR_BITS,
         );
-        save_regs!(context.icfgr_mut(), sgi, icfgr, ppi_count, Sgi::ICFGR_BITS);
-        save_regs!(
-            context.ipriorityr_mut(),
-            sgi,
-            ipriorityr,
+        save_regs(
+            context.icfgr_mut(),
+            field_shared!(sgi, icfgr),
+            0,
             ppi_count,
-            Sgi::IPRIORITY_BITS
+            Sgi::ICFGR_BITS,
+        );
+        save_regs(
+            context.ipriorityr_mut(),
+            field_shared!(sgi, ipriorityr),
+            0,
+            ppi_count,
+            Sgi::IPRIORITY_BITS,
         );
 
         // Call the pre-save hook that implements the IMP DEF sequence that may be required on some

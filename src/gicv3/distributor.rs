@@ -4,9 +4,9 @@
 use crate::{
     IntId, Trigger, clear_bit,
     gicv3::{
-        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup, register_count,
+        GicError, Group, HIGHEST_NS_PRIORITY, SecureIntGroup,
         registers::{Gicd, GicdCtlr, Pidr2, Typer},
-        set_regs,
+        restore_regs, save_regs, set_regs,
     },
     set_bit, write_bit,
 };
@@ -27,61 +27,6 @@ macro_rules! select_regs {
             ))
         } else {
             Err(GicError::InvalidGicdIntid($intid))
-        }
-    };
-}
-
-/// Reads the (E)SPI registers and store them in a context structure.
-///
-/// The macro iterates over a range of `$regs.$reg` and saves each register into `$context`. The
-/// range is determined based on `$start_offset`, `$int_count`, `$bits_per_int` and the type of the
-/// registers.
-macro_rules! save_regs {
-    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
-        save_regs!(
-            $context,
-            $regs,
-            $reg,
-            $int_count,
-            $bits_per_int,
-            IntId::SPI_START as usize
-        )
-    };
-    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr, $start_offset:expr) => {
-        let context_typed = if false { $context[0] } else { 0 };
-        let reg_start = register_count($start_offset, $bits_per_int, &context_typed);
-        let reg_end = register_count($start_offset + $int_count, $bits_per_int, &context_typed);
-        for i in reg_start..reg_end {
-            $context[i - reg_start] = field_shared!($regs, $reg).get(i).unwrap().read();
-        }
-    };
-}
-
-/// Restores the (E)SPI register values from a context structure.
-///
-/// The macro iterates over a range of `$regs.$reg` and restores each register from `$context`. The
-/// range is determined based on `$start_offset`, `$int_count`, `$bits_per_int` and the type of the
-/// registers.
-macro_rules! restore_regs {
-    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr) => {
-        restore_regs!(
-            $context,
-            $regs,
-            $reg,
-            $int_count,
-            $bits_per_int,
-            IntId::SPI_START as usize
-        );
-    };
-    ($context:expr, $regs:expr, $reg:ident, $int_count:expr, $bits_per_int:expr, $start_offset:expr) => {
-        let context_typed = if false { $context[0] } else { 0 };
-        let reg_start = register_count($start_offset, $bits_per_int, &context_typed);
-        let reg_end = register_count($start_offset + $int_count, $bits_per_int, &context_typed);
-        for i in reg_start..reg_end {
-            field!($regs, $reg)
-                .get(i)
-                .unwrap()
-                .write($context[i - reg_start]);
         }
     };
 }
@@ -592,159 +537,149 @@ impl<'a> GicDistributor<'a> {
         )?;
 
         // IGROUPR(_E)
-        restore_regs!(
+        restore_regs(
             context.igroupr(),
-            self.regs,
-            igroupr,
+            field!(self.regs, igroupr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::IGROUPR_BITS
+            Gicd::IGROUPR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.igroupr_e(),
-            self.regs,
-            igroupr_e,
+            field!(self.regs, igroupr_e),
+            0,
             espi_count,
             Gicd::IGROUPR_BITS,
-            0
         );
 
         // IPRIORITY(_E)
-        restore_regs!(
+        restore_regs(
             context.ipriorityr(),
-            self.regs,
-            ipriorityr,
+            field!(self.regs, ipriorityr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::IPRIORITY_BITS
+            Gicd::IPRIORITY_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.ipriorityr_e(),
-            self.regs,
-            ipriorityr_e,
+            field!(self.regs, ipriorityr_e),
+            0,
             espi_count,
             Gicd::IPRIORITY_BITS,
-            0
         );
 
         // ICFGR(_E)
-        restore_regs!(
+        restore_regs(
             context.icfgr(),
-            self.regs,
-            icfgr,
+            field!(self.regs, icfgr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ICFGR_BITS
+            Gicd::ICFGR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.icfgr_e(),
-            self.regs,
-            icfgr_e,
+            field!(self.regs, icfgr_e),
+            0,
             espi_count,
             Gicd::ICFGR_BITS,
-            0
         );
 
         // IGRPMODR(_E)
-        restore_regs!(
+        restore_regs(
             context.igrpmodr(),
-            self.regs,
-            igrpmodr,
+            field!(self.regs, igrpmodr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::IGRPMODR_BITS
+            Gicd::IGRPMODR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.igrpmodr_e(),
-            self.regs,
-            igrpmodr_e,
+            field!(self.regs, igrpmodr_e),
+            0,
             espi_count,
             Gicd::IGRPMODR_BITS,
-            0
         );
 
         // NSACR(_E)
-        restore_regs!(
+        restore_regs(
             context.nsacr(),
-            self.regs,
-            nsacr,
+            field!(self.regs, nsacr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::NSACR_BITS
+            Gicd::NSACR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.nsacr_e(),
-            self.regs,
-            nsacr_e,
+            field!(self.regs, nsacr_e),
+            0,
             espi_count,
             Gicd::NSACR_BITS,
-            0
         );
 
         // IROUTER(_E)
-        restore_regs!(
+        restore_regs(
             context.irouter(),
-            self.regs,
-            irouter,
+            field!(self.regs, irouter),
+            0,
             spi_count,
             Gicd::IROUTER_BITS,
-            0
         );
-        restore_regs!(
+        restore_regs(
             context.irouter_e(),
-            self.regs,
-            irouter_e,
+            field!(self.regs, irouter_e),
+            0,
             espi_count,
             Gicd::IROUTER_BITS,
-            0
         );
 
         // Restore ISENABLER(E), ISPENDR(E) and ISACTIVER(E) after the interrupts are configured.
 
         // ISENABLER(_E)
-        restore_regs!(
+        restore_regs(
             context.isenabler(),
-            self.regs,
-            isenabler,
+            field!(self.regs, isenabler),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ISENABLER_BITS
+            Gicd::ISENABLER_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.isenabler_e(),
-            self.regs,
-            isenabler_e,
+            field!(self.regs, isenabler_e),
+            0,
             espi_count,
             Gicd::ISENABLER_BITS,
-            0
         );
 
         // ISPENDR(_E)
-        restore_regs!(
+        restore_regs(
             context.ispendr(),
-            self.regs,
-            ispendr,
+            field!(self.regs, ispendr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ISPENDR_BITS
+            Gicd::ISPENDR_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.ispendr_e(),
-            self.regs,
-            ispendr_e,
+            field!(self.regs, ispendr_e),
+            0,
             espi_count,
             Gicd::ISPENDR_BITS,
-            0
         );
 
         // ISACTIVER(_E)
-        restore_regs!(
+        restore_regs(
             context.isactiver(),
-            self.regs,
-            isactiver,
+            field!(self.regs, isactiver),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ISACTIVER_BITS
+            Gicd::ISACTIVER_BITS,
         );
-        restore_regs!(
+        restore_regs(
             context.isactiver_e(),
-            self.regs,
-            isactiver_e,
+            field!(self.regs, isactiver_e),
+            0,
             espi_count,
             Gicd::ISACTIVER_BITS,
-            0
         );
 
         // Restore the GICD_CTLR
@@ -777,157 +712,147 @@ impl<'a> GicDistributor<'a> {
         context.ctlr = field_shared!(self.regs, ctlr).read();
 
         // IGROUPR_BITS
-        save_regs!(
+        save_regs(
             context.igroupr_mut(),
-            self.regs,
-            igroupr,
+            field_shared!(self.regs, igroupr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::IGROUPR_BITS
+            Gicd::IGROUPR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.igroupr_e_mut(),
-            self.regs,
-            igroupr_e,
+            field_shared!(self.regs, igroupr_e),
+            0,
             espi_count,
             Gicd::IGROUPR_BITS,
-            0
         );
 
         // ISENABLER(_E)
-        save_regs!(
+        save_regs(
             context.isenabler_mut(),
-            self.regs,
-            isenabler,
+            field_shared!(self.regs, isenabler),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ISENABLER_BITS
+            Gicd::ISENABLER_BITS,
         );
-        save_regs!(
+        save_regs(
             context.isenabler_e_mut(),
-            self.regs,
-            isenabler_e,
+            field_shared!(self.regs, isenabler_e),
+            0,
             espi_count,
             Gicd::ISENABLER_BITS,
-            0
         );
 
         // ISPENDR(_E)
-        save_regs!(
+        save_regs(
             context.ispendr_mut(),
-            self.regs,
-            ispendr,
+            field_shared!(self.regs, ispendr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ISPENDR_BITS
+            Gicd::ISPENDR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.ispendr_e_mut(),
-            self.regs,
-            ispendr_e,
+            field_shared!(self.regs, ispendr_e),
+            0,
             espi_count,
             Gicd::ISPENDR_BITS,
-            0
         );
 
         // ISACTIVER(_E)
-        save_regs!(
+        save_regs(
             context.isactiver_mut(),
-            self.regs,
-            isactiver,
+            field_shared!(self.regs, isactiver),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ISACTIVER_BITS
+            Gicd::ISACTIVER_BITS,
         );
-        save_regs!(
+        save_regs(
             context.isactiver_e_mut(),
-            self.regs,
-            isactiver_e,
+            field_shared!(self.regs, isactiver_e),
+            0,
             espi_count,
             Gicd::ISACTIVER_BITS,
-            0
         );
 
         // IPRIORITY(_E)
-        save_regs!(
+        save_regs(
             context.ipriorityr_mut(),
-            self.regs,
-            ipriorityr,
+            field_shared!(self.regs, ipriorityr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::IPRIORITY_BITS
+            Gicd::IPRIORITY_BITS,
         );
-        save_regs!(
+        save_regs(
             context.ipriorityr_e_mut(),
-            self.regs,
-            ipriorityr_e,
+            field_shared!(self.regs, ipriorityr_e),
+            0,
             espi_count,
             Gicd::IPRIORITY_BITS,
-            0
         );
 
         // ICFGR(_E)
-        save_regs!(
+        save_regs(
             context.icfgr_mut(),
-            self.regs,
-            icfgr,
+            field_shared!(self.regs, icfgr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::ICFGR_BITS
+            Gicd::ICFGR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.icfgr_e_mut(),
-            self.regs,
-            icfgr_e,
+            field_shared!(self.regs, icfgr_e),
+            0,
             espi_count,
             Gicd::ICFGR_BITS,
-            0
         );
 
         // IGRPMODR(_E)
-        save_regs!(
+        save_regs(
             context.igrpmodr_mut(),
-            self.regs,
-            igrpmodr,
+            field_shared!(self.regs, igrpmodr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::IGRPMODR_BITS
+            Gicd::IGRPMODR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.igrpmodr_e_mut(),
-            self.regs,
-            igrpmodr_e,
+            field_shared!(self.regs, igrpmodr_e),
+            0,
             espi_count,
             Gicd::IGRPMODR_BITS,
-            0
         );
 
         // NSACR(_E)
-        save_regs!(
+        save_regs(
             context.nsacr_mut(),
-            self.regs,
-            nsacr,
+            field_shared!(self.regs, nsacr),
+            IntId::SPI_START as usize,
             spi_count,
-            Gicd::NSACR_BITS
+            Gicd::NSACR_BITS,
         );
-        save_regs!(
+        save_regs(
             context.nsacr_e_mut(),
-            self.regs,
-            nsacr_e,
+            field_shared!(self.regs, nsacr_e),
+            0,
             espi_count,
             Gicd::NSACR_BITS,
-            0
         );
 
         // IROUTER(_E)
-        save_regs!(
+        save_regs(
             context.irouter_mut(),
-            self.regs,
-            irouter,
+            field_shared!(self.regs, irouter),
+            0,
             spi_count,
             Gicd::IROUTER_BITS,
-            0
         );
-        save_regs!(
+        save_regs(
             context.irouter_e_mut(),
-            self.regs,
-            irouter_e,
+            field_shared!(self.regs, irouter_e),
+            0,
             espi_count,
             Gicd::IROUTER_BITS,
-            0
         );
 
         Ok(())
