@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bugfixes
+
+- Fixed build on AArch32 targets.
+
 ## 0.9.0
 
 ### Breaking changes
