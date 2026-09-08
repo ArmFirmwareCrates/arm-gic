@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Changed ipriorityr(_e) fields to use `u32` in `Gicd`, `Sgi`,
+  `GicDistributorContext`, and `GicRedistributorContext`. This allows more
+  efficient batched operations during save and restore.
+- Renamed Gicd/Sgi::IPRIORITY_BITS to IPRIORITYR_BITS to match the other
+  constants.
+
 ## 0.9.1
 
 ### Bugfixes

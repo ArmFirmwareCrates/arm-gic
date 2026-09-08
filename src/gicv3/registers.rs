@@ -8,9 +8,41 @@ use bitflags::bitflags;
 use core::{
     cmp::min,
     fmt::{self, Debug, Formatter},
+    ptr::NonNull,
 };
-use safe_mmio::fields::{ReadPure, ReadPureWrite, WriteOnly};
+use safe_mmio::{
+    SharedMmioPointer, UniqueMmioPointer, field, field_shared,
+    fields::{ReadPure, ReadPureWrite, WriteOnly},
+};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
+
+// Generates accessor functions that reinterpret an u32 register range as u8. Accessing the
+// registers through these allows atomic writes instead of read-modify-write.
+//
+// The caller must ensure that $reg supports 8-bit access.
+macro_rules! make_bytes_accessor {
+    ($reg:ident, $fn_mut:ident, $fn_shared:ident, $arr_len:expr) => {
+        #[doc = concat!("Provides a 8-bit view over ", stringify!($reg))]
+        pub fn $fn_mut<'a>(
+            mut self_ptr: &'a mut UniqueMmioPointer<Self>,
+        ) -> UniqueMmioPointer<'a, [ReadPureWrite<u8>; $arr_len * 4]> {
+            let reg_ptr: *mut [ReadPureWrite<u32>; $arr_len] = field!(self_ptr, $reg).ptr_mut();
+            // SAFETY: The macro call site's author has determined that the given registers do
+            // support 8-bit access
+            unsafe { self_ptr.child(NonNull::new(reg_ptr.cast()).unwrap()) }
+        }
+        #[doc = concat!("Provides a 8-bit view over ", stringify!($reg))]
+        pub fn $fn_shared<'a>(
+            self_ptr: &'a SharedMmioPointer<Self>,
+        ) -> SharedMmioPointer<'a, [ReadPureWrite<u8>; $arr_len * 4]> {
+            let reg_ptr: *const [ReadPureWrite<u32>; $arr_len] =
+                field_shared!(self_ptr, $reg).ptr();
+            // SAFETY: The macro call site's author has determined that the given registers do
+            // support 8-bit access
+            unsafe { self_ptr.child(NonNull::new(reg_ptr.cast_mut().cast()).unwrap()) }
+        }
+    };
+}
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
@@ -375,7 +407,7 @@ pub struct Gicd {
     /// Interrupt clear-active registers.
     pub icactiver: [ReadPureWrite<u32>; 32],
     /// Interrupt priority registers.
-    pub ipriorityr: [ReadPureWrite<u8>; 1024],
+    pub ipriorityr: [ReadPureWrite<u32>; 256],
     /// Interrupt processor targets registers.
     pub itargetsr: [ReadPure<u32>; 256],
     /// Interrupt configuration registers.
@@ -417,7 +449,7 @@ pub struct Gicd {
     pub icactive_e: [ReadPureWrite<u32>; 32],
     _reserved14: [u32; 224],
     /// Interrupt priority registers for extended SPI range.
-    pub ipriorityr_e: [ReadPureWrite<u8>; 1024],
+    pub ipriorityr_e: [ReadPureWrite<u32>; 256],
     _reserved15: [u32; 768],
     /// Extended SPI configuration registers.
     pub icfgr_e: [ReadPureWrite<u32>; 64],
@@ -454,11 +486,21 @@ impl Gicd {
     pub const ISPENDR_BITS: usize = 1;
     pub const ISACTIVER_BITS: usize = 1;
     pub const ICACTIVER_BITS: usize = 1;
-    pub const IPRIORITY_BITS: usize = 8;
+    pub const IPRIORITYR_BITS: usize = 8;
     pub const ICFGR_BITS: usize = 2;
     pub const IGRPMODR_BITS: usize = 1;
     pub const NSACR_BITS: usize = 2;
     pub const IROUTER_BITS: usize = 64;
+
+    // Safety: Section 12.1.3 GIC memory-mapped register access of the GIC specification
+    // describes that GICD_IPRIORITYR(_E) registers support both 8-bit and 32-bit accesses.
+    make_bytes_accessor!(ipriorityr, ipriorityr_bytes, ipriorityr_bytes_shared, 256);
+    make_bytes_accessor!(
+        ipriorityr_e,
+        ipriorityr_e_bytes,
+        ipriorityr_e_bytes_shared,
+        256
+    );
 }
 
 #[repr(transparent)]
@@ -574,7 +616,7 @@ pub struct Sgi {
     pub icactiver: [ReadPureWrite<u32>; 3],
     _reserved7: [u32; 29],
     /// Interrupt priority registers.
-    pub ipriorityr: [ReadPureWrite<u8>; 96],
+    pub ipriorityr: [ReadPureWrite<u32>; 24],
     _reserved8: [u32; 488],
     /// SGI configuration register, PPI configuration register and extended PPI configuration
     /// registers.
@@ -601,9 +643,13 @@ impl Sgi {
     pub const ISPENDR_BITS: usize = 1;
     pub const ISACTIVER_BITS: usize = 1;
     pub const ICACTIVER_BITS: usize = 1;
-    pub const IPRIORITY_BITS: usize = 8;
+    pub const IPRIORITYR_BITS: usize = 8;
     pub const ICFGR_BITS: usize = 2;
     pub const IGRPMODR_BITS: usize = 1;
+
+    // Safety: Section 12.1.3 GIC memory-mapped register access of the GIC specification
+    // describes that GICR_IPRIORITYR supports both 8-bit and 32-bit accesses.
+    make_bytes_accessor!(ipriorityr, ipriorityr_bytes, ipriorityr_bytes_shared, 24);
 }
 
 #[cfg(test)]

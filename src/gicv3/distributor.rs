@@ -11,7 +11,7 @@ use crate::{
     set_bit, write_bit,
 };
 use core::{hint::spin_loop, ops::Range};
-use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};
+use safe_mmio::{UniqueMmioPointer, field, field_shared};
 use zerocopy::{transmute_mut, transmute_ref};
 
 /// Selects regular or extended registers based on in the `IntId`.
@@ -175,7 +175,7 @@ impl<const IREG_COUNT: usize, const IREG_E_COUNT: usize>
         (icfgr, icfgr_mut, u32, Gicd::ICFGR_BITS),
         (igrpmodr, igrpmodr_mut, u32, Gicd::IGRPMODR_BITS),
         (nsacr, nsacr_mut, u32, Gicd::NSACR_BITS),
-        (ipriorityr, ipriorityr_mut, u8, Gicd::IPRIORITY_BITS)
+        (ipriorityr, ipriorityr_mut, u32, Gicd::IPRIORITYR_BITS)
     ];
 
     define_context_extended_registers![
@@ -187,7 +187,7 @@ impl<const IREG_COUNT: usize, const IREG_E_COUNT: usize>
         (icfgr_e, icfgr_e_mut, u32, Gicd::ICFGR_BITS),
         (igrpmodr_e, igrpmodr_e_mut, u32, Gicd::IGRPMODR_BITS),
         (nsacr_e, nsacr_e_mut, u32, Gicd::NSACR_BITS),
-        (ipriorityr_e, ipriorityr_e_mut, u8, Gicd::IPRIORITY_BITS)
+        (ipriorityr_e, ipriorityr_e_mut, u32, Gicd::IPRIORITYR_BITS)
     ];
 
     const fn spi_reg_index(bits: Range<usize>) -> Range<usize> {
@@ -274,45 +274,19 @@ impl<'a> GicDistributor<'a> {
             HIGHEST_NS_PRIORITY,
         ]);
 
-        let mut ipriorityr_bytes = field!(self.regs, ipriorityr);
-
-        // Safety: ipriorityr_bytes is a valid pointer to the ipriority register array. Section
-        // 12.1.3 GIC memory-mapped register access of the GIC specificition describes that
-        // GICD_IPRIORITYR supports both 8-bit and 32-bit accesses.
-        let ipriority_words = unsafe {
-            UniqueMmioPointer::new(
-                ipriorityr_bytes
-                    .ptr_nonnull()
-                    .cast::<[ReadPureWrite<u32>; 1024 / 4]>(),
-            )
-        };
-
         set_regs(
-            ipriority_words,
-            SPI_START / 4,
-            spi_count / 4,
-            Gicd::IPRIORITY_BITS * 4,
+            field!(self.regs, ipriorityr),
+            SPI_START,
+            spi_count,
+            Gicd::IPRIORITYR_BITS,
             ipriority_word_value,
         );
 
-        let mut ipriorityr_e_bytes = field!(self.regs, ipriorityr_e);
-
-        // Safety: ipriorityr_bytes is a valid pointer to the ipriority register array. Section
-        // 12.1.3 GIC memory-mapped register access of the GIC specificition describes that
-        // GICD_IPRIORITYR supports both 8-bit and 32-bit accesses.
-        let ipriority_e_words = unsafe {
-            UniqueMmioPointer::new(
-                ipriorityr_e_bytes
-                    .ptr_nonnull()
-                    .cast::<[ReadPureWrite<u32>; 1024 / 4]>(),
-            )
-        };
-
         set_regs(
-            ipriority_e_words,
+            field!(self.regs, ipriorityr_e),
             0,
-            espi_count / 4,
-            Gicd::IPRIORITY_BITS * 4,
+            espi_count,
+            Gicd::IPRIORITYR_BITS,
             ipriority_word_value,
         );
 
@@ -383,7 +357,13 @@ impl<'a> GicDistributor<'a> {
     /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and
     /// 255 is the lowest.
     pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) -> Result<(), GicError> {
-        let (mut registers, index) = select_regs!(self.regs, ipriorityr, ipriorityr_e, intid)?;
+        let (mut registers, index) = if intid.0 < IntId::SPECIAL_START {
+            (Gicd::ipriorityr_bytes(&mut self.regs), intid.0 as usize)
+        } else if let Some(espi_index) = intid.espi_index() {
+            (Gicd::ipriorityr_e_bytes(&mut self.regs), espi_index)
+        } else {
+            return Err(GicError::InvalidGicdIntid(intid));
+        };
         registers.get(index).unwrap().write(priority);
         Ok(())
     }
@@ -558,14 +538,14 @@ impl<'a> GicDistributor<'a> {
             field!(self.regs, ipriorityr),
             IntId::SPI_START as usize,
             spi_count,
-            Gicd::IPRIORITY_BITS,
+            Gicd::IPRIORITYR_BITS,
         );
         restore_regs(
             context.ipriorityr_e(),
             field!(self.regs, ipriorityr_e),
             0,
             espi_count,
-            Gicd::IPRIORITY_BITS,
+            Gicd::IPRIORITYR_BITS,
         );
 
         // ICFGR(_E)
@@ -781,14 +761,14 @@ impl<'a> GicDistributor<'a> {
             field_shared!(self.regs, ipriorityr),
             IntId::SPI_START as usize,
             spi_count,
-            Gicd::IPRIORITY_BITS,
+            Gicd::IPRIORITYR_BITS,
         );
         save_regs(
             context.ipriorityr_e_mut(),
             field_shared!(self.regs, ipriorityr_e),
             0,
             espi_count,
-            Gicd::IPRIORITY_BITS,
+            Gicd::IPRIORITYR_BITS,
         );
 
         // ICFGR(_E)

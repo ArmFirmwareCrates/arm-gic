@@ -11,7 +11,7 @@ use crate::{
     set_bit, write_bit,
 };
 use core::{hint::spin_loop, marker::PhantomData, ops::Range, ptr::NonNull, stringify};
-use safe_mmio::{UniqueMmioPointer, field, field_shared, fields::ReadPureWrite};
+use safe_mmio::{UniqueMmioPointer, field, field_shared};
 use zerocopy::{transmute_mut, transmute_ref};
 
 /// Reads a GICR register and stores it in a context structure.
@@ -205,7 +205,7 @@ impl<const IREG_COUNT: usize> GicRedistributorContext<IREG_COUNT> {
         (isactiver, isactiver_mut, u32, Sgi::ISACTIVER_BITS),
         (igrpmodr, igrpmodr_mut, u32, Sgi::IGRPMODR_BITS),
         (icfgr, icfgr_mut, u32, Sgi::ICFGR_BITS),
-        (ipriorityr, ipriorityr_mut, u8, Sgi::IPRIORITY_BITS)
+        (ipriorityr, ipriorityr_mut, u32, Sgi::IPRIORITYR_BITS)
     ];
 
     const fn index(bits: Range<usize>) -> Range<usize> {
@@ -268,19 +268,6 @@ impl<'a> GicRedistributor<'a> {
 
         // For performance reasons this array of registers is initialized as words, so four
         // priority values can be set in one iteration.
-        let mut ipriorityr_bytes = field!(sgi, ipriorityr);
-
-        // Safety: ipriorityr_bytes is a valid pointer to the ipriority register array. Section
-        // 12.1.3 GIC memory-mapped register access of the GIC specificition describes that
-        // GICR_IPRIORITYR supports both 8-bit and 32-bit accesses.
-        let ipriority_words = unsafe {
-            UniqueMmioPointer::new(
-                ipriorityr_bytes
-                    .ptr_nonnull()
-                    .cast::<[ReadPureWrite<u32>; 96 / 4]>(),
-            )
-        };
-
         let ipriority_word_value = u32::from_le_bytes([
             HIGHEST_NS_PRIORITY,
             HIGHEST_NS_PRIORITY,
@@ -289,10 +276,10 @@ impl<'a> GicRedistributor<'a> {
         ]);
 
         set_regs(
-            ipriority_words,
+            field!(sgi, ipriorityr),
             0,
-            ppi_count / 4,
-            Sgi::IPRIORITY_BITS * 4,
+            ppi_count,
+            Sgi::IPRIORITYR_BITS,
             ipriority_word_value,
         );
 
@@ -312,18 +299,18 @@ impl<'a> GicRedistributor<'a> {
         field_shared!(gicr, pidr2).read()
     }
 
-    /// Sets the interrupt priority of the given interrupt ID. This function will panic if invoked
-    /// with a non-private IntId.
+    /// Sets the interrupt priority of the given private interrupt ID.
     pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) -> Result<(), GicError> {
         let index = Self::private_index(intid)?;
         let mut sgi = field!(self.regs, sgi);
-        field!(sgi, ipriorityr).get(index).unwrap().write(priority);
+        Sgi::ipriorityr_bytes(&mut sgi)
+            .get(index)
+            .unwrap()
+            .write(priority);
         Ok(())
     }
 
-    /// Configures the trigger type for the interrupt with the given ID.
-    ///
-    /// This function will panic if invoked with a non-private IntId.
+    /// Configures the trigger type for the interrupt with the given private interrupt ID.
     pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) -> Result<(), GicError> {
         let index = Self::private_index(intid)?;
 
@@ -343,9 +330,7 @@ impl<'a> GicRedistributor<'a> {
         Ok(())
     }
 
-    /// Assigns the interrupt with id `intid` to interrupt group `group`.
-    ///
-    /// This function will panic if invoked with a non-private IntId.
+    /// Assigns the interrupt with private id `intid` to interrupt group `group`.
     pub fn set_group(&mut self, intid: IntId, group: Group) -> Result<(), GicError> {
         let index = Self::private_index(intid)?;
 
@@ -365,9 +350,7 @@ impl<'a> GicRedistributor<'a> {
         Ok(())
     }
 
-    /// Enables or disables the interrupt with the given ID.
-    ///
-    /// This function will panic if invoked with a non-private IntId.
+    /// Enables or disables the interrupt with the given private interrupt ID.
     pub fn enable_interrupt(&mut self, intid: IntId, enable: bool) -> Result<(), GicError> {
         let index = Self::private_index(intid)?;
         let mut sgi = field!(self.regs, sgi);
@@ -460,7 +443,7 @@ impl<'a> GicRedistributor<'a> {
             field!(sgi, ipriorityr),
             0,
             ppi_count,
-            Sgi::IPRIORITY_BITS,
+            Sgi::IPRIORITYR_BITS,
         );
         restore_regs(
             context.icfgr(),
@@ -576,7 +559,7 @@ impl<'a> GicRedistributor<'a> {
             field_shared!(sgi, ipriorityr),
             0,
             ppi_count,
-            Sgi::IPRIORITY_BITS,
+            Sgi::IPRIORITYR_BITS,
         );
 
         // Call the pre-save hook that implements the IMP DEF sequence that may be required on some
