@@ -542,12 +542,16 @@ impl<'a> GicRedistributor<'a> {
 
     fn wait_until_group_not_in_transit(&self) {
         let gicr = field_shared!(self.regs, gicr);
-        let pwrr = field_shared!(gicr, pwrr).read();
+        let pwrr_reg = field_shared!(gicr, pwrr);
 
         // Check group not transitioning
-        while pwrr.contains(GicrPwrr::RedistributorGroupPowerDown)
-            != pwrr.contains(GicrPwrr::RedistributorGroupPoweredOff)
-        {
+        loop {
+            let pwrr = pwrr_reg.read();
+            if pwrr.contains(GicrPwrr::RedistributorGroupPowerDown)
+                == pwrr.contains(GicrPwrr::RedistributorGroupPoweredOff)
+            {
+                break;
+            }
             spin_loop();
         }
     }
