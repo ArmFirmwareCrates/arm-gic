@@ -78,7 +78,7 @@ pub struct Gicd {
     /// Interrupt Clear-Active Registers.
     pub icactiver: [ReadPureWrite<u32>; 0x20],
     /// Interrupt Priority Registers.
-    pub ipriorityr: [ReadPureWrite<u32>; 0x100],
+    pub ipriorityr: [ReadPureWrite<u8>; 0x400],
     /// Interrupt Processor Targets Registers.
     pub itargetsr: [u32; 0x100],
     /// Interrupt Configuration Registers.

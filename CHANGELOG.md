@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Changed the `ipriorityr` field of the GICv2 `Gicd` to `[ReadPureWrite<u8>; 0x400]`, as the
+  `GICD_IPRIORITYR` registers are byte-accessible.
+
+### Bugfixes
+
+- `GicV2::set_interrupt_priority` no longer sets the priorities of the other three interrupts that
+  share its `GICD_IPRIORITYR` register to 0.
+
 ## 0.10.0
 
 ### Breaking changes

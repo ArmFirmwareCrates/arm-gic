@@ -153,10 +153,9 @@ impl GicV2<'_> {
     /// Note that lower numbers correspond to higher priorities; i.e. 0 is the highest priority, and
     /// 255 is the lowest.
     pub fn set_interrupt_priority(&mut self, intid: IntId, priority: u8) {
-        let idx = intid.0 as usize / 4;
-        let priority = (priority as u32) << (8 * (intid.0 % 4));
+        // The registers are byte-accessible, so write only this interrupt's priority.
         field!(self.gicd, ipriorityr)
-            .get(idx)
+            .get(intid.0 as usize)
             .unwrap()
             .write(priority);
     }
@@ -263,4 +262,67 @@ pub enum SgiTargetListFilter {
     CPUTargetList,
     ForwardOthersOnly,
     ForwardSelfOnly,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Zeroed memory standing in for registers, `COUNT` 32-bit words of it.
+    #[repr(C, align(8))]
+    struct FakeRegisters<const COUNT: usize> {
+        regs: [u32; COUNT],
+    }
+
+    impl<const COUNT: usize> FakeRegisters<COUNT> {
+        pub fn new() -> Self {
+            Self { regs: [0; COUNT] }
+        }
+    }
+
+    /// A GICv2's distributor and CPU interface, in memory, each as large as its registers' type.
+    struct FakeGicV2 {
+        gicd: FakeRegisters<{ size_of::<Gicd>().div_ceil(4) }>,
+        gicc: FakeRegisters<{ size_of::<Gicc>().div_ceil(4) }>,
+    }
+
+    impl FakeGicV2 {
+        pub fn new() -> Self {
+            Self {
+                gicd: FakeRegisters::new(),
+                gicc: FakeRegisters::new(),
+            }
+        }
+
+        pub fn gicd_read(&self, offset: usize) -> u32 {
+            self.gicd.regs[offset / 4]
+        }
+
+        pub fn gic_for_test(&mut self) -> GicV2<'_> {
+            // SAFETY: Both pointers are to memory as large as the registers and aligned for them,
+            // which nothing else accesses while the returned `GicV2` borrows it.
+            unsafe {
+                GicV2::new(
+                    (&raw mut self.gicd).cast::<Gicd>(),
+                    (&raw mut self.gicc).cast::<Gicc>(),
+                )
+            }
+        }
+    }
+
+    #[test]
+    fn set_interrupt_priority_keeps_neighbours() {
+        let mut regs = FakeGicV2::new();
+        let mut gic = regs.gic_for_test();
+
+        gic.set_interrupt_priority(IntId::spi(0), 0x10);
+        gic.set_interrupt_priority(IntId::spi(1), 0x20);
+        gic.set_interrupt_priority(IntId::spi(2), 0x30);
+        gic.set_interrupt_priority(IntId::spi(3), 0x40);
+        gic.set_interrupt_priority(IntId::spi(1), 0x50);
+
+        // SPIs 0 to 3 are interrupts 32 to 35, whose priorities are in GICD_IPRIORITYR8, at
+        // offset 0x420.
+        assert_eq!(regs.gicd_read(0x420), 0x4030_5010);
+    }
 }
