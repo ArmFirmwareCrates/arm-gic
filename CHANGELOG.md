@@ -6,6 +6,14 @@
 
 - Changed the `ipriorityr` field of the GICv2 `Gicd` to `[ReadPureWrite<u8>; 0x400]`, as the
   `GICD_IPRIORITYR` registers are byte-accessible.
+- Changed the `itargetsr` field of the GICv2 `Gicd` to `[ReadPureWrite<u8>; 0x400]`, so that it
+  can be read and written, a byte at a time, as the `GICD_ITARGETSR` registers are
+  byte-accessible.
+
+### New features
+
+- Added `GicV2::set_targets` and `GicV2::current_cpu_target`, to send shared peripheral
+  interrupts to CPU cores.
 
 ### Bugfixes
 

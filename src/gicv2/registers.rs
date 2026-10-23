@@ -80,7 +80,7 @@ pub struct Gicd {
     /// Interrupt Priority Registers.
     pub ipriorityr: [ReadPureWrite<u8>; 0x400],
     /// Interrupt Processor Targets Registers.
-    pub itargetsr: [u32; 0x100],
+    pub itargetsr: [ReadPureWrite<u8>; 0x400],
     /// Interrupt Configuration Registers.
     pub icfgr: [ReadPureWrite<u32>; 0x40],
     _reserved_1: [u32; 0x80],

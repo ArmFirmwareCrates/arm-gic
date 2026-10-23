@@ -160,6 +160,27 @@ impl GicV2<'_> {
             .write(priority);
     }
 
+    /// Returns the bit for the current CPU core in the processor target registers.
+    ///
+    /// This is read from the target field of an SGI, which only reports the CPU interface that
+    /// reads it, and can be passed to [`Self::set_targets`].
+    pub fn current_cpu_target(&self) -> u8 {
+        field_shared!(self.gicd, itargetsr).get(0).unwrap().read()
+    }
+
+    /// Sets the CPU cores that the shared peripheral interrupt with the given ID is sent to, as a
+    /// bitmask with a bit for each CPU interface.
+    ///
+    /// An SPI is not sent to any core until it has a target. The targets of SGIs and PPIs are
+    /// fixed, so this has no effect for them.
+    pub fn set_targets(&mut self, intid: IntId, targets: u8) {
+        // The registers are byte-accessible, so write only this interrupt's targets.
+        field!(self.gicd, itargetsr)
+            .get(intid.0 as usize)
+            .unwrap()
+            .write(targets);
+    }
+
     /// Configures the trigger type for the interrupt with the given ID.
     pub fn set_trigger(&mut self, intid: IntId, trigger: Trigger) {
         let index = (intid.0 / 16) as usize;
@@ -294,6 +315,10 @@ mod tests {
             }
         }
 
+        pub fn gicd_write(&mut self, offset: usize, value: u32) {
+            self.gicd.regs[offset / 4] = value;
+        }
+
         pub fn gicd_read(&self, offset: usize) -> u32 {
             self.gicd.regs[offset / 4]
         }
@@ -324,5 +349,23 @@ mod tests {
         // SPIs 0 to 3 are interrupts 32 to 35, whose priorities are in GICD_IPRIORITYR8, at
         // offset 0x420.
         assert_eq!(regs.gicd_read(0x420), 0x4030_5010);
+    }
+
+    #[test]
+    fn set_targets_keeps_neighbours() {
+        let mut regs = FakeGicV2::new();
+        // The target fields of SGIs report the CPU interface reading them, here CPU 2.
+        regs.gicd_write(0x800, 0x0404_0404);
+        let mut gic = regs.gic_for_test();
+
+        let current = gic.current_cpu_target();
+        assert_eq!(current, 0x04);
+        gic.set_targets(IntId::spi(0), 0x01);
+        gic.set_targets(IntId::spi(1), current);
+        gic.set_targets(IntId::spi(3), 0x03);
+
+        // SPIs 0 to 3 are interrupts 32 to 35, whose targets are in GICD_ITARGETSR8, at offset
+        // 0x820.
+        assert_eq!(regs.gicd_read(0x820), 0x0300_0401);
     }
 }
