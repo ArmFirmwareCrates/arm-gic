@@ -239,6 +239,7 @@ impl GicCpuInterface {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gicv3::tests::lock_sysregs;
     use arm_sysregs::el1::{
         fake::SYSREGS as EL1_SYSREGS,
         registers::{IccEoir0El1, IccEoir1El1, IccHppir0El1, IccHppir1El1, IccIar0El1, IccIar1El1},
@@ -247,16 +248,6 @@ mod tests {
     use arm_sysregs::el2::fake::SYSREGS as EL2_SYSREGS;
     #[cfg(feature = "el3")]
     use arm_sysregs::el3::fake::SYSREGS as EL3_SYSREGS;
-
-    fn clear_regs() {
-        EL1_SYSREGS.lock().unwrap().reset();
-
-        #[cfg(feature = "el2")]
-        EL2_SYSREGS.lock().unwrap().reset();
-
-        #[cfg(feature = "el3")]
-        EL3_SYSREGS.lock().unwrap().reset();
-    }
 
     macro_rules! read_reg {
         ($reg:ident, $sysregs:expr) => {
@@ -272,7 +263,7 @@ mod tests {
 
     #[test]
     fn enable_group0() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::enable_group0(true);
         assert_eq!(0x0000_0001, read_reg!(icc_igrpen0_el1, EL1_SYSREGS).bits());
@@ -283,7 +274,7 @@ mod tests {
 
     #[test]
     fn enable_group1() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::enable_group1(true);
         assert_eq!(0x0000_0001, read_reg!(icc_igrpen1_el1, EL1_SYSREGS).bits());
@@ -295,7 +286,7 @@ mod tests {
     #[cfg(feature = "el3")]
     #[test]
     fn enable_group1_secure_non_secure() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::enable_group1_secure(true);
         assert_eq!(0x0000_0002, read_reg!(icc_igrpen1_el3, EL3_SYSREGS).bits());
@@ -312,7 +303,7 @@ mod tests {
 
     #[test]
     fn get_pending_interrupt() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         write_reg!(
             icc_hppir0_el1,
@@ -347,7 +338,7 @@ mod tests {
 
     #[test]
     fn get_and_acknowledge_interrupt() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         write_reg!(icc_iar0_el1, EL1_SYSREGS, IccIar0El1::from_bits_retain(32));
         assert_eq!(
@@ -374,7 +365,7 @@ mod tests {
 
     #[test]
     fn end_interrupt() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::end_interrupt(IntId::sgi(15), InterruptGroup::Group0);
         assert_eq!(
@@ -391,7 +382,7 @@ mod tests {
 
     #[test]
     fn handle_interrupt() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         let mut worked = false;
         write_reg!(icc_iar0_el1, EL1_SYSREGS, IccIar0El1::from_bits_retain(32));
@@ -420,7 +411,7 @@ mod tests {
 
     #[test]
     fn send_sgi() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         assert_eq!(
             Ok(()),
@@ -466,7 +457,7 @@ mod tests {
 
     #[test]
     fn set_priority_mask() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::set_priority_mask(0xab);
         assert_eq!(0xab, GicCpuInterface::get_priority_mask());
@@ -474,7 +465,7 @@ mod tests {
 
     #[test]
     fn enable_system_register_el1() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::enable_system_register_el1();
         assert_eq!(0x0000_0001, read_reg!(icc_sre_el1, EL1_SYSREGS).bits());
@@ -483,7 +474,7 @@ mod tests {
     #[cfg(feature = "el2")]
     #[test]
     fn enable_system_register_el2() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::enable_system_register_el2(false);
         assert_eq!(0x0000_0001, read_reg!(icc_sre_el2, EL2_SYSREGS).bits());
@@ -495,7 +486,7 @@ mod tests {
     #[cfg(feature = "el3")]
     #[test]
     fn enable_system_register_el3() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::enable_system_register_el3(false);
         assert_eq!(0x0000_0001, read_reg!(icc_sre_el3, EL3_SYSREGS).bits());
@@ -506,7 +497,7 @@ mod tests {
 
     #[test]
     fn disable_legacy_interrupt_bypass_el1() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el1(true);
         assert_eq!(0x0000_0006, read_icc_sre_el1().bits());
@@ -518,7 +509,7 @@ mod tests {
     #[cfg(feature = "el2")]
     #[test]
     fn disable_legacy_interrupt_bypass_el2() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el2(true);
         assert_eq!(0x0000_0006, read_icc_sre_el2().bits());
@@ -530,7 +521,7 @@ mod tests {
     #[cfg(feature = "el3")]
     #[test]
     fn disable_legacy_interrupt_bypass_el3() {
-        clear_regs();
+        let _sysregs = lock_sysregs();
 
         GicCpuInterface::disable_legacy_interrupt_bypass_el3(true);
         assert_eq!(0x0000_0006, read_icc_sre_el3().bits());

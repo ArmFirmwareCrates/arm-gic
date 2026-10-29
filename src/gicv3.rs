@@ -396,7 +396,24 @@ mod tests {
     use super::*;
     use crate::sysreg::{IccIgrpen1El1, IccSreEl1};
     use arm_sysregs::el1::fake::SYSREGS;
+    use std::sync::{Mutex, MutexGuard, PoisonError};
     use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, transmute_mut};
+
+    /// Held by each test that uses the fake system registers for its whole run, as they're shared
+    /// by all tests, which run in parallel.
+    static SYSREGS_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Waits for the other tests to finish with the fake system registers, then resets them.
+    pub(super) fn lock_sysregs() -> MutexGuard<'static, ()> {
+        // A test that failed while holding the lock left the registers to be reset, as here.
+        let guard = SYSREGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        SYSREGS.lock().unwrap().reset();
+        #[cfg(feature = "el2")]
+        arm_sysregs::el2::fake::SYSREGS.lock().unwrap().reset();
+        #[cfg(feature = "el3")]
+        arm_sysregs::el3::fake::SYSREGS.lock().unwrap().reset();
+        guard
+    }
 
     #[derive(Clone, Eq, FromBytes, Immutable, IntoBytes, KnownLayout, PartialEq)]
     #[repr(C, align(8))]
@@ -466,6 +483,7 @@ mod tests {
 
     #[test]
     fn setup() {
+        let _sysregs = lock_sysregs();
         let mut regs = FakeGic::new();
 
         // SPI count = 32
