@@ -4,13 +4,14 @@
 #![no_std]
 #![no_main]
 
-use aarch64_rt::{entry, exception_handlers, ExceptionHandlers, RegisterStateRef};
+use aarch64_rt::{ExceptionHandlers, RegisterStateRef, entry, exception_handlers};
 use arm_gic::{
+    IntId, InterruptGroup,
     gicv2::{
-        registers::{Gicc, Gicd},
         GicV2,
+        registers::{Gicc, Gicd},
     },
-    irq_enable, wfi, IntId, InterruptGroup,
+    irq_enable, wfi,
 };
 use arm_pl011_uart::Uart;
 use core::{
@@ -22,8 +23,8 @@ use core::{
 };
 use flat_device_tree::Fdt;
 use log::{LevelFilter, Log, Metadata, Record};
-use smccc::{psci::system_off, Hvc};
-use spin::{mutex::SpinMutex, Once};
+use smccc::{Hvc, psci::system_off};
+use spin::{Once, mutex::SpinMutex};
 
 /// Base memory-mapped address of the primary PL011 UART device.
 pub const UART_BASE_ADDRESS: *mut u32 = 0x900_0000 as _;

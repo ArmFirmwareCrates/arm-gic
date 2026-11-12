@@ -4,13 +4,14 @@
 #![no_std]
 #![no_main]
 
-use aarch64_rt::{entry, exception_handlers, ExceptionHandlers, RegisterStateRef};
+use aarch64_rt::{ExceptionHandlers, RegisterStateRef, entry, exception_handlers};
 use arm_gic::{
+    IntId, InterruptGroup, Trigger, UniqueMmioPointer,
     gicv3::{
-        registers::{Gicd, GicrSgi},
         GicCpuInterface, GicV3,
+        registers::{Gicd, GicrSgi},
     },
-    irq_enable, wfi, IntId, InterruptGroup, Trigger, UniqueMmioPointer,
+    irq_enable, wfi,
 };
 use arm_pl011_uart::{DataBits, LineConfig, PL011Registers, Parity, StopBits, Uart};
 use core::{
@@ -22,7 +23,7 @@ use core::{
 };
 use flat_device_tree::Fdt;
 use log::{LevelFilter, Log, Metadata, Record};
-use smccc::{psci::system_off, Hvc};
+use smccc::{Hvc, psci::system_off};
 use spin::mutex::SpinMutex;
 
 /// Base memory-mapped address of the primary PL011 UART device.

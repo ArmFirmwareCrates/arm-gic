@@ -2,7 +2,7 @@
 name = "gicv3-example"
 version = "0.1.0"
 authors = ["Manos Pitsidianakis <manos.pitsidianakis@linaro.org>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 aarch64-rt = { version = "0.4.3", default-features = false, features = ["el1", "exceptions", "psci"] }
