@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
 
 ### Breaking changes
 
@@ -9,6 +9,7 @@
 - Changed the `itargetsr` field of the GICv2 `Gicd` to `[ReadPureWrite<u8>; 0x400]`, so that it
   can be read and written, a byte at a time, as the `GICD_ITARGETSR` registers are
   byte-accessible.
+- Updated to `safe-mmio` 0.4.0.
 
 ### New features
 

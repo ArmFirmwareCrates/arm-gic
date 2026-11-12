@@ -13,14 +13,14 @@ keywords = ["arm", "aarch64", "driver", "gic", "interrupt-controller"]
 categories = ["embedded", "no-std", "hardware-support"]
 
 [dependencies]
-arm-sysregs = { version = "0.5.1", features = ["el1"] }
-bitflags = "2.13.1"
-safe-mmio = "0.3.1"
-thiserror = { version = "2.0.18", default-features = false }
-zerocopy = { version = "0.8.56", features = ["derive"] }
+arm-sysregs = { version = "0.5.2", features = ["el1"] }
+bitflags = "2.13.2"
+safe-mmio = "0.4.0"
+thiserror = { version = "2.0.21", default-features = false }
+zerocopy = { version = "0.8.63", features = ["derive"] }
 
 [dev-dependencies]
-arm-sysregs = { version = "0.5.1", features = ["fakes"] }
+arm-sysregs = { version = "0.5.2", features = ["fakes"] }
 
 [features]
 el2 = ["arm-sysregs/el2"]

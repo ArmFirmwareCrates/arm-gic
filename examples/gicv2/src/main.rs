@@ -13,7 +13,7 @@ use arm_gic::{
     },
     irq_enable, wfi,
 };
-use arm_pl011_uart::Uart;
+use arm_pl011_uart::{DataBits, LineConfig, Parity, StopBits, Uart, UniqueMmioPointer};
 use core::{
     arch::asm,
     fmt::Write,
@@ -141,8 +141,6 @@ entry!(main);
 fn main(x0: u64, _x1: u64, _x2: u64, _x3: u64) -> ! {
     // Initialise logger uart
     {
-        use arm_pl011_uart::{DataBits, LineConfig, Parity, StopBits, UniqueMmioPointer};
-
         // SAFETY: BASE_ADDRESS is the base of the MMIO region for a UART and is mapped as device
         // memory.
         let uart_pointer =
